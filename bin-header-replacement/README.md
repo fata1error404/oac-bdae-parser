@@ -6,15 +6,15 @@ All game resource files are stored in (little-endian) binary files `.bin`, which
 
 ### OaC 1.0.3
 
-<img src="aux_docs/1.png" width="80%" height="45%">
+<img src="1.png" width="80%" height="45%">
 
 ### OaC 4.2.5
 
-<img src="aux_docs/2.jpg" width="80%" height="45%">
+<img src="2.jpg" width="80%" height="45%">
 
 <br />
 <br />
 
 ### ZIP file header structure
 
-<img src="aux_docs/zip-file.png" width="80%" height="45%">
+<img src="zip-file.png" width="80%" height="45%">
