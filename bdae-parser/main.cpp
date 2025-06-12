@@ -18,13 +18,17 @@ int main()
 
         if (bdaeFile)
         {
-            glitch::res::File myFile;
+            File myFile;
             int result = myFile.Init(bdaeFile);
 
             std::cout << "\n"
                       << (result != 1 ? "SUCCESS" : "ERROR") << std::endl;
         }
+
+        delete bdaeFile;
     }
+
+    delete archiveReader;
 
     return 0;
 }
