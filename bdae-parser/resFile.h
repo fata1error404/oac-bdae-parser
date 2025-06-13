@@ -26,7 +26,7 @@ struct FileHeaderData
 };
 
 /*
-    You end up with a fully–populated File object whose entire .bdae payload is in memory (header + offset table + string table + data + removable chunks), with every offset “fix‑up” to real C++ pointers and all embedded strings pulled out into shared‐string instances.
+    We end up with a fully–populated File object whose entire .bdae payload is in memory (header + offset table + string table + data + removable chunks), with every offset “fix‑up” to real C++ pointers and all embedded strings pulled out into shared‐string instances.
 */
 
 struct File : public Access<FileHeaderData>

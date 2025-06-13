@@ -13,15 +13,15 @@ int File::ExternalFileOffsetTableSize[2] = {0, 0};
 int File::ExternalFileStringTableSize[2] = {0, 0};
 char *File::ExternalFilePtr[2] = {0, 0};
 
-//! Reads raw binary data from .bdae file and loads its parsed sections into memory.
-// _________________________________________________________________________________
+//! Reads raw binary data from .bdae file and loads its sections into memory.
+// __________________________________________________________________________
 
 int File::Init(IReadResFile *file)
 {
     std::cout << "[Init] Starting File::Init..\n"
               << std::endl;
     std::cout << "---------------" << std::endl;
-    std::cout << "[Init] PART 1. \n       Reading raw binary data from .bdae file and loading its parsed sections into memory." << std::endl;
+    std::cout << "[Init] PART 1. \n       Reading raw binary data from .bdae file and loading its sections into memory." << std::endl;
     std::cout << "---------------\n\n"
               << std::endl;
 

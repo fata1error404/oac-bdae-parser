@@ -16,8 +16,10 @@ public:
 
 	virtual ~CPackPatchReader();
 
+	//! Locates a file in either the main or updated Pack file archive and opens it.
 	virtual IReadResFile *openFile(const char *filename);
 
+	//! Merges contents of the updated Pack file archive into the main archive.
 	virtual bool addPackPatchFile(const char *filename, bool ignoreCase = true, bool ignorePaths = true);
 
 protected:

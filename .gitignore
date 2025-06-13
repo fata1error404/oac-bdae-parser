@@ -1,4 +1,7 @@
+.vscode/
 bdae-parser/.vscode/
+bdae-parser/app
+bdae-parser/temp.txt
 bin-header-replacement/.vscode/
 
 *.tags

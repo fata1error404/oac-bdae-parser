@@ -119,6 +119,7 @@ struct SPackResFileEntry
 	A custom pack reader to reduce memory cost when containing many files in a pack.
 	For example, the file unit's memory manage cost is reduced from 100 bytes to only 12 bytes (the size of SPackResFileEntry);
 	The file unit is compressed by zip generally.
+	___________________________________________________________________________________________________________________________
 */
 
 class CPackResReader : public IResReferenceCounted
@@ -130,30 +131,29 @@ public:
 
 	virtual ~CPackResReader();
 
-	//! opens a file by file name
+	//! Opens a file by file name.
 	virtual IReadResFile *openFile(const char *filename);
 
-	//! opens a file by index
+	//! Opens a file by index.
 	IReadResFile *openFile(int index);
 
-	//! returns count of files in archive
+	//! Returns count of files in archive.
 	int getFileCount() { return m_fileList.size(); }
 
-	//! returns data of file
+	//! Returns data of file.
 	const SPackResFileEntry *getFileInfo(int index) const { return &m_fileList[index]; }
 
-	//! returns fileindex
+	//! Returns fileindex.
 	int findFile(const char *filename);
 
-	//! returns the name of the Pack file archive
+	//! Returns the name of the Pack file archive.
 	const char *getPackFileName() const { return m_file ? m_file->getFileName() : NULL; }
 
 	static bool isValid(IReadResFile *file);
 
 	static bool isValid(const char *filename);
 
-	//! scans for a local header, returns false if there is no more
-	//! local file header.
+	//! Scans for a local header, returns false if there is no more local file header.
 	void scanFileHeader();
 
 private:

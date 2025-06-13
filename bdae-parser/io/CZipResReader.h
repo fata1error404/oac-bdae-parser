@@ -60,6 +60,7 @@ struct SZipResFileEntry
 	Zip file Reader class.
 	Doesn't decompress data, only reads the file and is able to
 	open uncompressed entries.
+	___________________________________________________________
 */
 
 class CZipResReader : public IResReferenceCounted
@@ -71,22 +72,22 @@ public:
 
 	virtual ~CZipResReader();
 
-	//! opens a file by file name
+	//! Opens a file by file name.
 	virtual IReadResFile *openFile(const char *filename);
 
-	//! opens a file by index
+	//! Opens a file by index.
 	IReadResFile *openFile(int index);
 
-	//! returns count of files in archive
+	//! Returns count of files in archive.
 	int getFileCount() { return FileList.size(); }
 
-	//! returns data of file
+	//! Returns data of file.
 	const SZipResFileEntry *getFileInfo(int index) const { return &FileList[index]; }
 
-	//! returns fileindex
+	//! Returns fileindex.
 	int findFile(const char *filename);
 
-	//! returns the name of the zip file archive
+	//! Returns the name of the zip file archive.
 	const char *getZipFileName() const { return File ? File->getFileName() : NULL; }
 
 	static bool isValid(IReadResFile *file);
@@ -96,7 +97,7 @@ public:
 private:
 	IReadResFile *File;
 
-	//! scans for a local file header, returns false if there is no more
+	//! Scans for a local file header, returns false if there is no more.
 	bool scanLocalHeader();
 
 protected:
@@ -105,10 +106,10 @@ protected:
 	std::vector<SZipResFileEntry> FileList;
 	pthread_mutex_t mutex;
 
-	//! splits filename from zip file into useful filenames and paths
+	//! Splits filename from zip file into useful filenames and paths.
 	void extractFilename(SZipResFileEntry *entry);
 
-	//! deletes the path from a filename
+	//! Deletes the path from a filename.
 	void deletePathFromFilename(std::string &filename);
 };
 

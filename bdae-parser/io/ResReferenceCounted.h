@@ -7,13 +7,13 @@
 class IResReferenceCounted
 {
 public:
-	//! increases the counter
+	//! Increases the counter.
 	void grab() const
 	{
 		++ReferenceCounter;
 	}
 
-	//! decreases the counter and deletes the object if no references remain
+	//! Decreases the counter and deletes the object if no references remain.
 	bool drop() const
 	{
 		--ReferenceCounter;
