@@ -40,6 +40,7 @@ struct File : public Access<FileHeaderData>
     int NbRemovableBuffers;
     bool UseSeparatedAllocationForRemovableBuffers;
     int SizeDynamic;
+    std::vector<std::string> StringStorage;
 
     // bad: these static variables prevent multi-threaded loading..
     static char *ExternalFilePtr[2];

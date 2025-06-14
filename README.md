@@ -1,6 +1,6 @@
-<!-- markdownlint-disable MD033 MD001 MD045 -->
+<!-- markdownlint-disable MD001 -->
 
-# .BDAE File Format Parser and Viewer
+# .BDAE File Format Parser and Viewer 📄
 
 ### Project overview
 
@@ -31,6 +31,20 @@ __How does the .bdae parser work?__
 
 Assume we opened the outer `some_model.bdae` archive file and there is a file `little_endian_not_quantized.bdae` inside it, which is the real file storing the 3D model data (see `main.cpp`), and so we opened this inner file as well. Now we call the initialization function `Init()`, which is split into 2 separate functions with the same name. __In the first function, we read the raw binary data from the .bdae file and load its sections into memory.__ Basically, it is the preparation step for the main initialization, since we don't do any parsing and just allocate memory and load raw data based on the values read from the .bdae header. __In the second function, we resolve all relative offsets in the loaded .bdae file, converting them to direct pointers to the data while handling internal vs. external data references, string extraction, and removable chunks.__ This is the main initialization step, after which we can quickly access any data of the 3D model.
 
-Some explanation may be required here.. See the code annotation for more detail.
+Two concepts should be pointed out about the parser. I just mentioned internal and external data references with no comment of what they are. When you walk the offset table by iterating over each offset entry, an entry’s target may lie outside the bounds of the current .bdae file — this is called an _external_ reference. It's easy to guess what the _internal_ reference is. Well, these 2 scenarios have to be handled separately, and indeed the parser does so. To show the difference, I have to explain the second concept first. There is that file `access.h`, which makes it nice to work with offsets and pointers. The important things is that, after initialization, the in-memory .bdae File object is no longer laid out as it was on disk, so you cannot simply do origin + offset. Instead, __the only reliable way to find any data is via the offset table using the Access interface that replaces raw pointer arithmetic with a two‐layer abstraction: it uses outer and inner offsets__ (not to be confused with internal / external references). An offset table entry is an outer `Access<Access<int>>` object that stores the offset to an inner `Access<int>` object, which itself holds the offset to actual data. When parsing the offset table, a two-pass logic is used. In the first pass we process the outer offset, handling cases where it points to different sections of the .bdae file. In the second pass we process the inner offset, with minor changes in the logic, but we skip it for external references! Yes, because the inner offset would lead us outside of the .bdae file, and we don't want to initialize without knowing what we initialize. Reference file might not be loaded yet and must be initialized independently. See the code annotation for more detail.
 
-![result](result.jpg)
+![result](aux_docs/result.jpg)
+
+### Manual
+
+The project was implemented for my personal interest, though compiler / .bdae compatibility issues are not my concern. I was using the old C++ compiler version that was relevant during the development times of OaC. Although I do not recommend using, you may try to install it alongside your main compiler version and then switch between compiler versions at any time with `sudo update-alternatives --config g++`. Regardless, with newer compiler versions, the project should still compile with no errors. If you want to contribute, welcome to contact me or do a pull request.
+
+Compatibility: __.bdae v0.0.0.779__  
+Compiler: __g++ 4.2.1__  
+OS: __Linux Mint 21.2__
+
+Compile and launch  
+`make`  
+`./app`
+
+There is a default file, `example.bdae`, which is a 3D model of a skybox from __OaC v4.2.5__. All .bdae models for this OaC version can be downloaded from my [Google Drive]((https://drive.google.com/file/d/1YU3rkmLSvIk_II3vxLlim_QSzsavEXnp/view?usp=drivesdk)).

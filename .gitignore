@@ -1,7 +1,7 @@
+app
 .vscode/
-bdae-parser/.vscode/
-bdae-parser/app
-bdae-parser/temp.txt
-bin-header-replacement/.vscode/
+aux_docs/temp.txt
+aux_docs/BDAE.bt
 
+little_endian_not_quantized.bdae
 *.tags

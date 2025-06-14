@@ -6,7 +6,6 @@
 int File::SizeOfHeader = 0;
 
 bool File::ExtractStringTable = true;
-std::vector<std::string> StringStorage;
 
 // metadata storage based on reference type: index 0 = internal, index 1 = external
 int File::ExternalFileOffsetTableSize[2] = {0, 0};
@@ -194,8 +193,9 @@ int File::Init(IReadResFile *file)
                  offsetBuffer,
                  stringBuffer);
 
-    delete[] offsetBuffer;
-    OffsetTable = NULL;
+    // causes wrong offset for the first 2 offset entries
+    // delete[] offsetBuffer;
+    // OffsetTable = NULL;
 
     delete[] stringBuffer;
     StringTable = NULL;
@@ -301,6 +301,8 @@ int File::Init()
                     external = true; // mark that we are now resolving an external reference
                 }
 
+                // std::cout << "[" << i + 1 << "] " << offptr << std::endl;
+
                 // if this entry’s target lies after the Offset Data section
                 if (offptr >= ote)
                 {
@@ -319,7 +321,7 @@ int File::Init()
                     // Removable section
                     else if (offptr > (unsigned int)SizeUnRemovable)
                     {
-                        int nb = ((offptr - SizeUnRemovable) - sizeof(unsigned int)) / (sizeof(unsigned int) * 2); // determine which removable buffer this offset entry points to
+                        int nb = ((offptr - SizeUnRemovable) - sizeof(unsigned int)) / (sizeof(unsigned int) * 4); // determine which removable buffer this offset entry points to
 
                         // if the computed removable buffer number (index) is out of range, resolve it
                         if (nb > NbRemovableBuffers)
@@ -342,7 +344,6 @@ int File::Init()
                             // if this pointer also falls in the Removable section, resolve it
                             if (offptrptr > (unsigned int)SizeUnRemovable)
                             {
-                                // search linearly for the correct removable buffer whose [start, end] contains offptrptr
                                 int nb2 = 0;
                                 while (nb2 < NbRemovableBuffers - 1)
                                 {
@@ -352,7 +353,7 @@ int File::Init()
                                     nb2++;
                                 }
 
-                                void *base = (char *)((char *)RemovableBuffers[nb2] - (char *)RemovableBuffersInfo[nb2 * 2 + 1]); // pointer to the beginning of the nb2-th chunk in the Removable section
+                                void *base = (char *)((char *)RemovableBuffers[nb2] - (char *)RemovableBuffersInfo[nb2 * 2 + 1]);
                                 offset.ptr()->OffsetToPtr(base);
                                 continue;
                             }
@@ -362,7 +363,8 @@ int File::Init()
                         // computed removable buffer number was valid but no correction is desired (it is commented out in the source code)
                         else
                         {
-                            // offset.OffsetToPtr((char *)RemovableBuffersInfo[nb * 2 + 1] - offptr);
+                            void *base = (char *)((char *)RemovableBuffers[nb] - (char *)RemovableBuffersInfo[nb * 2 + 1]);
+                            offset.OffsetToPtr(base);
                             continue;
                         }
                     }
@@ -439,6 +441,8 @@ int File::Init()
                         offset.ptr()->OffsetToPtr(origin - originoff);
                 }
             }
+
+            Access<Access<int> > &offset = header->offsets[2];
         }
         /* 7b. This occurs when a temporary buffer is not used. The offset table is in-place — directly in the file’s main memory buffer — no separate deletable buffer (OffsetTable == NULL), so no need to retrieve or correct anything. Simply convert relative offsets to direct pointers. */
         else
