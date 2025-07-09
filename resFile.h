@@ -35,7 +35,7 @@ struct File : public Access<FileHeaderData>
     int SizeUnRemovable;
     int SizeOffsetStringTables;
     void **RemovableBuffers;
-    unsigned int *RemovableBuffersInfo;
+    unsigned long *RemovableBuffersInfo;
     int SizeRemovableBuffer;
     int NbRemovableBuffers;
     bool UseSeparatedAllocationForRemovableBuffers;
@@ -55,7 +55,7 @@ struct File : public Access<FileHeaderData>
 
     File() : IsValid(false), OffsetTable(NULL) {}
 
-    File(void *ptr, unsigned int *removableBuffersInfo = 0, void **removableBuffers = 0, bool useSeparatedAllocationForRemovableBuffers = false, void *offsetTable = NULL, void *stringTable = NULL)
+    File(void *ptr, unsigned long *removableBuffersInfo = 0, void **removableBuffers = 0, bool useSeparatedAllocationForRemovableBuffers = false, void *offsetTable = NULL, void *stringTable = NULL)
         : Access<FileHeaderData>(ptr), IsValid(false), OffsetTable(offsetTable), StringTable(stringTable), RemovableBuffersInfo(removableBuffersInfo), RemovableBuffers(removableBuffers), UseSeparatedAllocationForRemovableBuffers(useSeparatedAllocationForRemovableBuffers)
     {
         if (ptr)

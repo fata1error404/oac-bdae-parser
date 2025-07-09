@@ -141,8 +141,21 @@ int File::Init(IReadResFile *file)
     {
         // read size / offset pairs for each removable chunk
         std::cout << "\n[Init] At position " << file->getPos() << ", reading removable section info.." << std::endl;
-        RemovableBuffersInfo = new unsigned int[NbRemovableBuffers * 2];
-        file->read(RemovableBuffersInfo, NbRemovableBuffers * 2 * sizeof(unsigned int));
+        RemovableBuffersInfo = new unsigned long[NbRemovableBuffers * 2];
+        file->read(RemovableBuffersInfo, NbRemovableBuffers * 2 * sizeof(unsigned long));
+
+        std::cout << "\n_____________________\n"
+                  << std::endl;
+        std::cout << "Removable chunks info" << std::endl;
+        std::cout << "[#] (size, offset)" << std::endl;
+        for (int i = 0; i < NbRemovableBuffers; ++i)
+        {
+            std::cout << "[" << i + 1 << "] " << "(" << RemovableBuffersInfo[i * 2]
+                      << ", " << RemovableBuffersInfo[i * 2 + 1] << ")"
+                      << std::endl;
+        }
+        std::cout << "________________\n"
+                  << std::endl;
 
         // read chunks data
         std::cout << "[Init] At position " << file->getPos() << ", reading removable section data.." << std::endl;
@@ -153,7 +166,7 @@ int File::Init(IReadResFile *file)
             // separated allocation mode: read each chunk into its own buffer
             for (int i = 0; i < NbRemovableBuffers; ++i)
             {
-                unsigned int bufSize = RemovableBuffersInfo[i * 2];
+                unsigned long bufSize = RemovableBuffersInfo[i * 2];
                 RemovableBuffers[i] = new char[bufSize];
                 file->read(RemovableBuffers[i], bufSize);
             }
@@ -166,16 +179,16 @@ int File::Init(IReadResFile *file)
                 RemovableBuffers[0]             → pointer to the entire data block
                 RemovableBuffers[i] (for i > 0) → pointer into that block at the start of chunk i
             */
-            unsigned int totalDataSize = SizeRemovableBuffer - (NbRemovableBuffers * 2 * sizeof(unsigned int));
+            unsigned long totalDataSize = SizeRemovableBuffer - (NbRemovableBuffers * 2 * sizeof(unsigned long));
             RemovableBuffers[0] = new char[totalDataSize];
             file->read(RemovableBuffers[0], totalDataSize);
 
-            unsigned int baseOffset = RemovableBuffersInfo[1];
+            unsigned long baseOffset = RemovableBuffersInfo[1];
 
             // assign pointers
             for (int i = 1; i < NbRemovableBuffers; ++i)
             {
-                unsigned int chunkOffset = RemovableBuffersInfo[i * 2 + 1];
+                unsigned long chunkOffset = RemovableBuffersInfo[i * 2 + 1];
                 RemovableBuffers[i] = (char *)RemovableBuffers[0] + (chunkOffset - baseOffset);
             }
         }
@@ -200,8 +213,8 @@ int File::Init(IReadResFile *file)
     delete[] stringBuffer;
     StringTable = NULL;
 
-    delete[] RemovableBuffersInfo;
-    RemovableBuffersInfo = NULL;
+    // delete[] RemovableBuffersInfo;
+    // RemovableBuffersInfo = NULL;
 
     return IsValid != 1;
 }
@@ -406,6 +419,8 @@ int File::Init()
                         ote = ExternalFileOffsetTableSize[offptrptr >> 31];
                         ste = ExternalFileStringTableSize[offptrptr >> 31];
                     }
+
+                    // std::cout << "[" << i + 1 << "] " << offptrptr << std::endl;
 
                     if (offptrptr >= ote)
                     {

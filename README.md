@@ -53,4 +53,4 @@ Compile and launch
 `make`  
 `./app`
 
-There is a default file, `example.bdae`, which is a 3D model of a skybox from __OaC v4.2.5__. All .bdae models for this OaC version can be downloaded from my [Google Drive]((https://drive.google.com/file/d/1YU3rkmLSvIk_II3vxLlim_QSzsavEXnp/view?usp=drivesdk)).
+There is a default file, `example.bdae`, which is a 3D model of a skybox from __OaC v4.2.5__. All .bdae models for this OaC version can be downloaded from my [Google Drive](https://drive.google.com/file/d/1NxUE0G2D9DFhJOiJfVEwvkdy1isldB4F/view?usp=drive_link).
