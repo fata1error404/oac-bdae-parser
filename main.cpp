@@ -12,6 +12,7 @@
 #include "stb_image.h"           // library for image loading
 #include "shader.h"              // implementation of the graphics pipeline
 #include "camera.h"              // implementation of the camera system
+#include "light.h"               // definition of the light settings and light cube
 
 #include "io/PackPatchReader.h"
 #include "resFile.h"
@@ -69,7 +70,7 @@ int main()
     // enable depth testing to ensure correct pixel rendering order in 3D space (depth buffer prevents incorrect overlaying and redrawing of objects)
     glEnable(GL_DEPTH_TEST);
 
-    Shader ourShader("shader vertex.glsl", "shader fragment.glsl");
+    Shader ourShader("shader model.vs", "shader model.fs");
 
     // BDAE File Loading
     // _________________
@@ -84,7 +85,6 @@ int main()
     };
 
     std::vector<float> vertices;
-    std::vector<float> texcoords;
     std::vector<unsigned int> indices;
     int vertexOffset = 0;
 
@@ -133,6 +133,10 @@ int main()
                         vertices.push_back(v[1]); // y
                         vertices.push_back(v[2]); // z
 
+                        vertices.push_back(v[3]); //
+                        vertices.push_back(v[4]); //
+                        vertices.push_back(v[5]); //
+
                         vertices.push_back(v[6]); // u
                         vertices.push_back(v[7]); // v
                     }
@@ -165,15 +169,17 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
-    std::cout << "Total vertices: " << vertices.size() / 3 << std::endl;
+    std::cout << "Total vertices: " << vertices.size() / 8 << std::endl;
     std::cout << "Total faces: " << indices.size() / 3 << std::endl;
 
     // load the model's texture
@@ -197,6 +203,15 @@ int main()
     glGenerateMipmap(GL_TEXTURE_2D);                                                          // generate a mipmap
     stbi_image_free(data);
 
+    ourShader.use();
+    ourShader.setVec3("lightPos", lightPos);
+    ourShader.setVec3("lightColor", lightColor);
+    ourShader.setFloat("ambientStrength", ambientStrength);
+    ourShader.setFloat("diffuseStrength", diffuseStrength);
+    ourShader.setFloat("specularStrength", specularStrength);
+
+    Light lightSource(ourCamera);
+
     // game loop
     while (!glfwWindowShouldClose(window))
     {
@@ -219,11 +234,13 @@ int main()
         ourShader.setMat4("model", model);
         ourShader.setMat4("view", view);
         ourShader.setMat4("projection", projection);
+        ourShader.setBool("lighting", showLighting);
+        ourShader.setVec3("cameraPos", ourCamera.Position);
 
         glBindVertexArray(VAO);
-        // ourShader.setInt("renderMode", 2);
-        // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        // glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+        ourShader.setInt("renderMode", 2);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 
         ourShader.setInt("renderMode", 1);
         ourShader.setInt("modelTexture", 0);
@@ -231,6 +248,9 @@ int main()
         glBindTexture(GL_TEXTURE_2D, texture);
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+
+        // render light cube
+        lightSource.draw(view, projection);
 
         glfwSwapBuffers(window); // make the contents of the back buffer (stores the completed frames) visible on the screen
         glfwPollEvents();        // if any events are triggered (like keyboard input or mouse movement events), updates the window state, and calls the corresponding functions (which we can register via callback methods)
@@ -283,6 +303,9 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     {
         switch (key)
         {
+        case GLFW_KEY_L:
+            showLighting = !showLighting;
+            break;
         case GLFW_KEY_F:
         {
             isFullscreen = !isFullscreen;

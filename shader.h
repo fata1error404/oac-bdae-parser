@@ -66,9 +66,24 @@ public:
         glUniform1i(glGetUniformLocation(shaderProgram, name.c_str()), value);
     }
 
+    void setFloat(const std::string &name, float value) const
+    {
+        glUniform1f(glGetUniformLocation(shaderProgram, name.c_str()), value);
+    }
+
+    void setBool(const std::string &name, bool value) const
+    {
+        glUniform1i(glGetUniformLocation(shaderProgram, name.c_str()), (int)value);
+    }
+
     void setVec3(const std::string &name, glm::vec3 value) const
     {
         glUniform3fv(glGetUniformLocation(shaderProgram, name.c_str()), 1, glm::value_ptr(value));
+    }
+
+    void setVec4(const std::string &name, glm::vec4 value) const
+    {
+        glUniform4fv(glGetUniformLocation(shaderProgram, name.c_str()), 1, glm::value_ptr(value));
     }
 
     void setMat4(const std::string &name, glm::mat4 value) const
