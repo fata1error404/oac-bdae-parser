@@ -1,4 +1,3 @@
-#define GLM_COMPILER 0
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -8,13 +7,17 @@
 #include <glm/gtc/matrix_transform.hpp> // for matrix transformation functions
 #include <glm/gtc/type_ptr.hpp>         // for matrix conversion to raw pointers (OpenGL compatibility with GLM)
 
+#include "libs/imgui/imgui.h"
+#include "libs/imgui/imgui_impl_opengl3.h"
+#include "libs/imgui/imgui_impl_glfw.h"
+
 #define STB_IMAGE_IMPLEMENTATION // define a STB_IMAGE_IMPLEMENTATION macro (to tell the compiler to include function implementations)
 #include "stb_image.h"           // library for image loading
 #include "shader.h"              // implementation of the graphics pipeline
 #include "camera.h"              // implementation of the camera system
 #include "light.h"               // definition of the light settings and light cube
 
-#include "io/PackPatchReader.h"
+#include "libs/io/PackPatchReader.h"
 #include "resFile.h"
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
@@ -43,6 +46,10 @@ bool firstMouse = true;                 // flag to check if the mouse movement i
 float lastX = DEFAULT_SCR_WIDTH / 2.0;  // starting cursor position (x-axis)
 float lastY = DEFAULT_SCR_HEIGHT / 2.0; // starting cursor position (y-axis)
 
+const char *fileName = "example.bdae"; // city_sky.bdae
+
+bool renderMode = false;
+
 int main()
 {
     // initialize and configure (use core profile mode and OpenGL v3.3)
@@ -67,6 +74,30 @@ int main()
     // load all OpenGL function pointers
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
+    //
+    ImGui::CreateContext();
+    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+
+    ImGuiIO &io = ImGui::GetIO();
+    io.IniFilename = "libs/imgui/imgui.ini";
+
+    // 1) Grab the style
+    ImGuiStyle &style = ImGui::GetStyle();
+
+    // 2) Pick your colors (RGBA, each component 0.0f…1.0f)
+    //    Here’s an example dark gray background + slightly lighter title bar:
+    style.Colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    // 3) (Optional) Tweak rounding, borders, etc.
+    style.WindowRounding = 4.0f; // rounding of window corners
+    style.WindowBorderSize = 0.0f;
+
     // enable depth testing to ensure correct pixel rendering order in 3D space (depth buffer prevents incorrect overlaying and redrawing of objects)
     glEnable(GL_DEPTH_TEST);
 
@@ -84,11 +115,12 @@ int main()
         float padding;    // 4 bytes (maybe) or alignment
     };
 
+    int verticesNumber, facesNumber, fileSize;
     std::vector<float> vertices;
     std::vector<unsigned int> indices;
     int vertexOffset = 0;
 
-    IReadResFile *archiveFile = createReadFile("example.bdae"); // city_sky.bdae
+    IReadResFile *archiveFile = createReadFile(fileName);
 
     if (archiveFile)
     {
@@ -152,6 +184,10 @@ int main()
 
                     vertexOffset += submeshVertexCount;
                 }
+
+                verticesNumber = vertices.size() / 8;
+                facesNumber = indices.size() / 3;
+                fileSize = myFile.getSize();
             }
         }
 
@@ -223,6 +259,28 @@ int main()
         // handle keyboard input
         processInput(window);
 
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
+        ImGui::Begin("BDAE Model Info", NULL,
+                     ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoMove);
+        ImGui::Text("File: %s", fileName);
+        ImGui::Text("Size: %d Bytes", fileSize);
+        ImGui::Text("Vertices: %d", verticesNumber);
+        ImGui::Text("Faces: %d", facesNumber);
+
+        ImGui::NewLine();
+
+        ImGui::Checkbox("Base Mesh On/Off", &renderMode);
+        ImGui::Checkbox("Lighting On/Off", &showLighting);
+
+        ImGui::End();
+
         glClearColor(0.85f, 0.85f, 0.85f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the color buffer (fill the screen with a clear color) and the depth buffer; otherwise the information of the previous frame stays in these buffers
 
@@ -238,19 +296,29 @@ int main()
         ourShader.setVec3("cameraPos", ourCamera.Position);
 
         glBindVertexArray(VAO);
-        ourShader.setInt("renderMode", 2);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 
-        ourShader.setInt("renderMode", 1);
-        ourShader.setInt("modelTexture", 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+        if (!renderMode)
+        {
+            ourShader.setInt("renderMode", 1);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+        }
+        else
+        {
+            ourShader.setInt("renderMode", 2);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+
+            ourShader.setInt("renderMode", 3);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+        }
 
         // render light cube
         lightSource.draw(view, projection);
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window); // make the contents of the back buffer (stores the completed frames) visible on the screen
         glfwPollEvents();        // if any events are triggered (like keyboard input or mouse movement events), updates the window state, and calls the corresponding functions (which we can register via callback methods)
@@ -303,6 +371,9 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     {
         switch (key)
         {
+        case GLFW_KEY_K:
+            renderMode = !renderMode;
+            break;
         case GLFW_KEY_L:
             showLighting = !showLighting;
             break;

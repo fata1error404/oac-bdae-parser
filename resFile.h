@@ -3,7 +3,7 @@
 
 #include <string.h>
 #include "access.h"
-#include "io/CPackResReader.h"
+#include "libs/io/CPackResReader.h"
 
 struct FileHeaderData
 {
