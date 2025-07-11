@@ -10,6 +10,7 @@
 #include "libs/imgui/imgui.h"
 #include "libs/imgui/imgui_impl_opengl3.h"
 #include "libs/imgui/imgui_impl_glfw.h"
+#include "libs/imgui/ImGuiFileDialog.h"
 
 #define STB_IMAGE_IMPLEMENTATION // define a STB_IMAGE_IMPLEMENTATION macro (to tell the compiler to include function implementations)
 #include "stb_image.h"           // library for image loading
@@ -25,6 +26,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow *window, double xpos, double ypos);
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow *window);
+void loadBDAEModel(const char *fname);
 
 // window settings
 bool isFullscreen = false;
@@ -46,9 +48,16 @@ bool firstMouse = true;                 // flag to check if the mouse movement i
 float lastX = DEFAULT_SCR_WIDTH / 2.0;  // starting cursor position (x-axis)
 float lastY = DEFAULT_SCR_HEIGHT / 2.0; // starting cursor position (y-axis)
 
-const char *fileName = "example.bdae"; // city_sky.bdae
+bool displayBaseMesh = false;
 
-bool renderMode = false;
+bool modelLoaded = false;
+std::string currentFile;
+std::string fileName;
+int fileSize = 0;
+int verticesNumber = 0, facesNumber = 0;
+unsigned int VAO = 0, VBO = 0, EBO = 0, texture = 0;
+std::vector<float> vertices;
+std::vector<unsigned int> indices;
 
 int main()
 {
@@ -59,7 +68,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // GLFW window creation
-    GLFWwindow *window = glfwCreateWindow(DEFAULT_SCR_WIDTH, DEFAULT_SCR_HEIGHT, "BDAE Viewer by fata1error404", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(DEFAULT_SCR_WIDTH, DEFAULT_SCR_HEIGHT, "BDAE 3D Model Viewer", NULL, NULL);
 
     // set OpenGL context and callback
     glfwMakeContextCurrent(window);
@@ -67,9 +76,6 @@ int main()
     glfwSetScrollCallback(window, scroll_callback);   // register scroll callback
     glfwSetCursorPosCallback(window, mouse_callback); // register mouse callback
     glfwSetKeyCallback(window, key_callback);         // register key callback
-
-    // hide and lock the mouse cursor to the window
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // load all OpenGL function pointers
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
@@ -79,20 +85,22 @@ int main()
     ImGui_ImplOpenGL3_Init("#version 330");
     ImGui_ImplGlfw_InitForOpenGL(window, true);
 
-    ImGuiIO &io = ImGui::GetIO();
-    io.IniFilename = "libs/imgui/imgui.ini";
+    ImGui::GetIO().IniFilename = NULL; // don't save UI states
 
     // 1) Grab the style
     ImGuiStyle &style = ImGui::GetStyle();
 
     // 2) Pick your colors (RGBA, each component 0.0f…1.0f)
     //    Here’s an example dark gray background + slightly lighter title bar:
+    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);  // when hide settings
+    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f); // background of "File Name" / "Type"
     style.Colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
     style.Colors[ImGuiCol_WindowBg] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
     style.Colors[ImGuiCol_TitleBg] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
     style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
     style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
     style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
 
     // 3) (Optional) Tweak rounding, borders, etc.
     style.WindowRounding = 4.0f; // rounding of window corners
@@ -102,142 +110,6 @@ int main()
     glEnable(GL_DEPTH_TEST);
 
     Shader ourShader("shader model.vs", "shader model.fs");
-
-    // BDAE File Loading
-    // _________________
-
-    //
-    struct Vertex
-    {
-        float x, y, z;    // 12 bytes
-        float nx, ny, nz; // 12 bytes
-        float u, v;       // 8 bytes
-        float padding;    // 4 bytes (maybe) or alignment
-    };
-
-    int verticesNumber, facesNumber, fileSize;
-    std::vector<float> vertices;
-    std::vector<unsigned int> indices;
-    int vertexOffset = 0;
-
-    IReadResFile *archiveFile = createReadFile(fileName);
-
-    if (archiveFile)
-    {
-        CPackPatchReader *archiveReader = new CPackPatchReader(archiveFile, true, false);
-        archiveFile->drop();
-
-        IReadResFile *bdaeFile = archiveReader->openFile("little_endian_not_quantized.bdae");
-
-        if (bdaeFile)
-        {
-            File myFile;
-            int result = myFile.Init(bdaeFile);
-
-            std::cout << "\n"
-                      << (result != 1 ? "PARSING SUCCESS" : "PARSING ERROR") << std::endl;
-
-            if (result != 1)
-            {
-                int submeshCount = 0;
-
-                for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
-                {
-                    std::string &s = myFile.StringStorage[i];
-
-                    // must be at least 5 chars long to hold "-mesh"
-                    if (!s.empty() && s[0] != '#' && s.length() >= 5 && s.rfind("-mesh") == s.length() - 5)
-                        ++submeshCount;
-                }
-
-                std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
-
-                for (int i = 0; i < submeshCount; i++)
-                {
-                    unsigned char *submeshVertexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2] + 4;
-                    unsigned int submeshVertexDataSize = myFile.RemovableBuffersInfo[i * 4] - 4;
-                    unsigned int submeshVertexCount = submeshVertexDataSize / sizeof(Vertex);
-
-                    for (int j = 0; j < submeshVertexCount; j++)
-                    {
-                        float *v = reinterpret_cast<float *>(submeshVertexDataPtr + j * sizeof(Vertex));
-                        vertices.push_back(v[0]); // x
-                        vertices.push_back(v[1]); // y
-                        vertices.push_back(v[2]); // z
-
-                        vertices.push_back(v[3]); //
-                        vertices.push_back(v[4]); //
-                        vertices.push_back(v[5]); //
-
-                        vertices.push_back(v[6]); // u
-                        vertices.push_back(v[7]); // v
-                    }
-
-                    unsigned char *submeshIndexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2 + 1] + 4;
-                    unsigned int submeshIndexDataSize = myFile.RemovableBuffersInfo[i * 4 + 2] - 4;
-                    unsigned int submeshIndexCount = submeshIndexDataSize / sizeof(unsigned short);
-
-                    unsigned short *rawIndices = reinterpret_cast<unsigned short *>(submeshIndexDataPtr);
-
-                    for (int k = 0; k < submeshIndexCount; k++)
-                        indices.push_back((unsigned int)rawIndices[k] + i * vertexOffset);
-
-                    vertexOffset += submeshVertexCount;
-                }
-
-                verticesNumber = vertices.size() / 8;
-                facesNumber = indices.size() / 3;
-                fileSize = myFile.getSize();
-            }
-        }
-
-        delete bdaeFile;
-        delete archiveReader;
-    }
-
-    unsigned int VAO, VBO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
-
-    std::cout << "Total vertices: " << vertices.size() / 8 << std::endl;
-    std::cout << "Total faces: " << indices.size() / 3 << std::endl;
-
-    // load the model's texture
-    // ________________________
-
-    unsigned int texture;
-    glGenTextures(1, &texture);            // generate a texture object to store texture data
-    glBindTexture(GL_TEXTURE_2D, texture); // bind the texture object so that all upcoming texture operations affect this texture
-
-    // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // for s (x) axis
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // for t (y) axis
-
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load("texture/sky_city.png", &width, &height, &nrChannels, 0); // load the image and its parameters
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data); // create and store texture image inside the texture object
-    glGenerateMipmap(GL_TEXTURE_2D);                                                          // generate a mipmap
-    stbi_image_free(data);
 
     ourShader.use();
     ourShader.setVec3("lightPos", lightPos);
@@ -263,21 +135,77 @@ int main()
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Always);
+        // In your render‐loop ImGui block:sd
+        ImGui::SetNextWindowSize(ImVec2(200.0f, 200.0f), ImGuiCond_Always);
         ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
-        ImGui::Begin("BDAE Model Info", NULL,
+        ImGui::Begin("Settings", NULL,
                      ImGuiWindowFlags_NoResize |
                          ImGuiWindowFlags_AlwaysAutoResize |
                          ImGuiWindowFlags_NoMove);
-        ImGui::Text("File: %s", fileName);
-        ImGui::Text("Size: %d Bytes", fileSize);
-        ImGui::Text("Vertices: %d", verticesNumber);
-        ImGui::Text("Faces: %d", facesNumber);
 
-        ImGui::NewLine();
+        // 1) “Load Model” button always visible
+        if (ImGui::Button("Load Model"))
+        {
+            IGFD::FileDialogConfig cfg;
+            cfg.path = ".";            // start in current directory
+            cfg.fileName = "";         // no default filename
+            cfg.filePathName = "";     // ignore pre–set full path
+            cfg.countSelectionMax = 1; // only allow one file
+            cfg.userDatas = nullptr;   // no user data
+            cfg.flags = ImGuiFileDialogFlags_None;
+            cfg.sidePane = nullptr;           // no extra pane
+            cfg.sidePaneWidth = 250.0f;       // (unused)
+            cfg.userFileAttributes = nullptr; // default file attributes
 
-        ImGui::Checkbox("Base Mesh On/Off", &renderMode);
-        ImGui::Checkbox("Lighting On/Off", &showLighting);
+            IGFD::FileDialog::Instance()->OpenDialog(
+                "BDAE_OpenDlg",     // Dialog key
+                "Load .bdae Model", // Window title
+                ".bdae",            // Filters
+                cfg                 // FileDialogConfig
+            );
+        }
+
+        ImVec2 dialogSize(600.0f, 400.0f); // fixed dialog size
+        ImVec2 centerPos(
+            (currentScreenWidth - dialogSize.x) * 0.5f,
+            (currentScreenHeight - dialogSize.y) * 0.5f);
+
+        ImGui::SetNextWindowSize(dialogSize, ImGuiCond_Always);
+        ImGui::SetNextWindowPos(centerPos, ImGuiCond_Always);
+
+        // Render & handle the dialog every frame
+        if (IGFD::FileDialog::Instance()->Display("BDAE_OpenDlg", ImGuiWindowFlags_NoResize))
+        {
+            // User clicked “OK” or double‑clicked
+            if (IGFD::FileDialog::Instance()->IsOk())
+            {
+                // GetSelection() returns a map<filename, fullpath>
+                auto selection = IGFD::FileDialog::Instance()->GetSelection();
+                if (!selection.empty())
+                {
+                    // Since max=1, just grab the first entry
+                    currentFile = selection.begin()->second;
+                    loadBDAEModel(currentFile.c_str());
+                    size_t lastSlash = currentFile.find_last_of("/\\");
+                    fileName = (lastSlash == std::string::npos) ? currentFile : currentFile.substr(lastSlash + 1);
+                }
+            }
+            // Close the dialog to reset its state
+            IGFD::FileDialog::Instance()->Close();
+        }
+
+        // 2) If a model is loaded, show its stats + toggles
+        if (modelLoaded)
+        {
+            ImGui::Spacing();
+            ImGui::Text("File: %s", fileName.c_str());
+            ImGui::Text("Size: %d Bytes", fileSize);
+            ImGui::Text("Vertices: %d", verticesNumber);
+            ImGui::Text("Faces: %d", facesNumber);
+            ImGui::NewLine();
+            ImGui::Checkbox("Base Mesh On/Off", &displayBaseMesh);
+            ImGui::Checkbox("Lighting On/Off", &showLighting);
+        }
 
         ImGui::End();
 
@@ -297,7 +225,7 @@ int main()
 
         glBindVertexArray(VAO);
 
-        if (!renderMode)
+        if (!displayBaseMesh)
         {
             ourShader.setInt("renderMode", 1);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -345,6 +273,10 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 // whenever the mouse moves, this callback function executes
 void mouse_callback(GLFWwindow *window, double xpos, double ypos)
 {
+    // EXPLAIN
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS)
+        firstMouse = true;
+
     // handle the first mouse movement to prevent a sudden jump
     if (firstMouse)
     {
@@ -372,7 +304,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         switch (key)
         {
         case GLFW_KEY_K:
-            renderMode = !renderMode;
+            displayBaseMesh = !displayBaseMesh;
             break;
         case GLFW_KEY_L:
             showLighting = !showLighting;
@@ -435,4 +367,186 @@ void processInput(GLFWwindow *window)
         ourCamera.ProcessKeyboard(RIGHT);
 
     ourCamera.UpdatePosition(deltaTime);
+}
+
+// Encapsulate your entire BDAE + OpenGL setup here:
+// BDAE File Loading
+// _________________
+
+void loadBDAEModel(const char *fname)
+{
+    // 1) Clear old GPU buffers if any
+    if (VAO)
+    {
+        glDeleteVertexArrays(1, &VAO);
+        VAO = 0;
+    }
+    if (VBO)
+    {
+        glDeleteBuffers(1, &VBO);
+        VBO = 0;
+    }
+    if (EBO)
+    {
+        glDeleteBuffers(1, &EBO);
+        EBO = 0;
+    }
+    if (texture)
+    {
+        glDeleteTextures(1, &texture);
+        texture = 0;
+    }
+
+    std::string textureName;
+    vertices.clear();
+    indices.clear();
+    verticesNumber = facesNumber = fileSize = 0;
+
+    // 2) Load the .bdae exactly like you already do...
+    //    Fill `vertices` & `indices` vectors, compute verticesNumber, facesNumber, fileSize
+    //    (You can copy–paste your existing block here.)
+
+    struct Vertex
+    {
+        float x, y, z;    // 12 bytes
+        float nx, ny, nz; // 12 bytes
+        float u, v;       // 8 bytes
+        float padding;    // 4 bytes (maybe) or alignment
+    };
+
+    int vertexOffset = 0;
+
+    IReadResFile *archiveFile = createReadFile(fname);
+
+    if (archiveFile)
+    {
+        CPackPatchReader *archiveReader = new CPackPatchReader(archiveFile, true, false);
+        archiveFile->drop();
+
+        IReadResFile *bdaeFile = archiveReader->openFile("little_endian_not_quantized.bdae");
+
+        if (bdaeFile)
+        {
+            File myFile;
+            int result = myFile.Init(bdaeFile);
+
+            std::cout << "\n"
+                      << (result != 1 ? "PARSING SUCCESS" : "PARSING ERROR") << std::endl;
+
+            if (result != 1)
+            {
+                int submeshCount = 0;
+
+                for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
+                {
+                    std::string &s = myFile.StringStorage[i];
+
+                    // must be at least 5 chars long to hold "-mesh"
+                    if (!s.empty() && s[0] != '#' && s.length() >= 5 && s.rfind("-mesh") == s.length() - 5)
+                        ++submeshCount;
+                    // look for any string ending with .tga
+                    else if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0)
+                    {
+                        textureName = s;
+
+                        // replace ".tga" with ".png"
+                        textureName.replace(textureName.length() - 4, 4, ".png");
+
+                        // ensure it starts with "texture/"
+                        const std::string prefix = "texture/";
+                        if (textureName.rfind(prefix, 0) != 0) // doesn't already start with it
+                        {
+                            textureName = prefix + textureName;
+                        }
+                    }
+                }
+
+                std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
+                std::cout << textureName << std::endl;
+
+                for (int i = 0; i < submeshCount; i++)
+                {
+                    unsigned char *submeshVertexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2] + 4;
+                    unsigned int submeshVertexDataSize = myFile.RemovableBuffersInfo[i * 4] - 4;
+                    unsigned int submeshVertexCount = submeshVertexDataSize / sizeof(Vertex);
+
+                    for (int j = 0; j < submeshVertexCount; j++)
+                    {
+                        float *v = reinterpret_cast<float *>(submeshVertexDataPtr + j * sizeof(Vertex));
+                        vertices.push_back(v[0]); // x
+                        vertices.push_back(v[1]); // y
+                        vertices.push_back(v[2]); // z
+
+                        vertices.push_back(v[3]); //
+                        vertices.push_back(v[4]); //
+                        vertices.push_back(v[5]); //
+
+                        vertices.push_back(v[6]); // u
+                        vertices.push_back(v[7]); // v
+                    }
+
+                    unsigned char *submeshIndexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2 + 1] + 4;
+                    unsigned int submeshIndexDataSize = myFile.RemovableBuffersInfo[i * 4 + 2] - 4;
+                    unsigned int submeshIndexCount = submeshIndexDataSize / sizeof(unsigned short);
+
+                    unsigned short *rawIndices = reinterpret_cast<unsigned short *>(submeshIndexDataPtr);
+
+                    for (int k = 0; k < submeshIndexCount; k++)
+                        indices.push_back((unsigned int)rawIndices[k] + i * vertexOffset);
+
+                    vertexOffset += submeshVertexCount;
+                }
+
+                verticesNumber = vertices.size() / 8;
+                facesNumber = indices.size() / 3;
+                fileSize = myFile.getSize();
+            }
+        }
+
+        delete bdaeFile;
+        delete archiveReader;
+    }
+
+    // 3. setup buffers
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+
+    // 4. load texture
+    unsigned int texture;
+    glGenTextures(1, &texture);            // generate a texture object to store texture data
+    glBindTexture(GL_TEXTURE_2D, texture); // bind the texture object so that all upcoming texture operations affect this texture
+
+    // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // for s (x) axis
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // for t (y) axis
+
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load(textureName.c_str(), &width, &height, &nrChannels, 0);    // load the image and its parameters
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data); // create and store texture image inside the texture object
+    glGenerateMipmap(GL_TEXTURE_2D);                                                          // generate a mipmap
+    stbi_image_free(data);
+
+    // 5. remember state
+    modelLoaded = true;
+    currentFile = fname;
 }

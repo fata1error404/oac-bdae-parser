@@ -153,7 +153,7 @@ struct ImGui_ImplGlfw_WindowToContext { GLFWwindow* Window; ImGuiContext* Contex
 static ImVector<ImGui_ImplGlfw_WindowToContext> g_ContextMap;
 static void ImGui_ImplGlfw_ContextMap_Add(GLFWwindow* window, ImGuiContext* ctx) { g_ContextMap.push_back(ImGui_ImplGlfw_WindowToContext{ window, ctx }); }
 static void ImGui_ImplGlfw_ContextMap_Remove(GLFWwindow* window)                 { for (ImGui_ImplGlfw_WindowToContext& entry : g_ContextMap) if (entry.Window == window) { g_ContextMap.erase_unsorted(&entry); return; } }
-static ImGuiContext* ImGui_ImplGlfw_ContextMap_Get(GLFWwindow* window)           { for (ImGui_ImplGlfw_WindowToContext& entry : g_ContextMap) if (entry.Window == window) return entry.Context; return nullptr; }
+static ImGuiContext* ImGui_ImplGlfw_ContextMap_Get(GLFWwindow* window)           { for (ImGui_ImplGlfw_WindowToContext& entry : g_ContextMap) if (entry.Window == window) return entry.Context; return NULL; }
 
 // GLFW data
 enum GlfwClientApi

@@ -296,9 +296,9 @@ int File::Init()
                    Process offptr handling cases where it points to different sections of the .bdae file.
                    ────────────────────────────────────────────────────────────────────────────────────── */
 
-                char *origin = reinterpret_cast<char *>(header);                                     // pointer to the start of the current file’s memory block
-                unsigned int originoff = header->origin;                                             // base offset used as a reference to resolve relative offsets in the file
-                unsigned int offptr = (unsigned int)((char *)offset.ptr() - (char *)header->origin); // outer offset: relative offset from the file’s origin to the target pointer of this entry
+                char *origin = reinterpret_cast<char *>(header);                                 // pointer to the start of the current file’s memory block
+                unsigned int originoff = header->origin;                                         // base offset used as a reference to resolve relative offsets in the file
+                uintptr_t offptr = reinterpret_cast<uintptr_t>(offset.ptr()) - (header->origin); // outer offset: relative offset from the file’s origin to the target pointer of this entry (had to change unsigned int to uintptr_t variable type to silence the pointer arithmetic warning)
                 unsigned int ote = offsetTableEnd;
                 unsigned int ste = stringTableEnd;
                 bool external = false; // flag to indicate if this entry refers to an external memory chunk
@@ -352,7 +352,7 @@ int File::Init()
                             void *base = (char *)((char *)RemovableBuffers[nb1] - (char *)RemovableBuffersInfo[nb1 * 2 + 1]); // pointer to the beginning of the nb1-th chunk in the Removable section
                             offset.OffsetToPtr(base);
 
-                            unsigned int offptrptr = (unsigned int)((char *)offset.ptr()->ptr() - (char *)header->origin); // relative offset from the file’s origin to the actual data of this chunk (i.e., the inner pointer stored at the target entry, which points to data within a removable chunk)
+                            uintptr_t offptrptr = reinterpret_cast<uintptr_t>(offset.ptr()->ptr()) - (header->origin); // relative offset from the file’s origin to the actual data of this chunk (i.e., the inner pointer stored at the target entry, which points to data within a removable chunk)
 
                             // if this pointer also falls in the Removable section, resolve it
                             if (offptrptr > (unsigned int)SizeUnRemovable)
@@ -407,7 +407,7 @@ int File::Init()
                 {
                     origin = reinterpret_cast<char *>(header);
                     originoff = header->origin;
-                    unsigned int offptrptr = (unsigned int)((char *)offset.ptr()->ptr() - (char *)header->origin); // inner offset: relative offset from the file’s origin to the target data of this entry
+                    uintptr_t offptrptr = reinterpret_cast<uintptr_t>(offset.ptr()->ptr()) - (header->origin); // inner offset: relative offset from the file’s origin to the target data of this entry
                     ote = offsetTableEnd;
                     ste = stringTableEnd;
 

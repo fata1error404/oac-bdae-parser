@@ -255,7 +255,7 @@ struct ImGui_ImplOpenGL3_Data
 // It is STRONGLY preferred that you use docking branch with multi-viewports (== single Dear ImGui context + multiple windows) instead of multiple Dear ImGui contexts.
 static ImGui_ImplOpenGL3_Data* ImGui_ImplOpenGL3_GetBackendData()
 {
-    return ImGui::GetCurrentContext() ? (ImGui_ImplOpenGL3_Data*)ImGui::GetIO().BackendRendererUserData : nullptr;
+    return ImGui::GetCurrentContext() ? (ImGui_ImplOpenGL3_Data*)ImGui::GetIO().BackendRendererUserData : NULL;
 }
 
 // OpenGL vertex attribute state (for ES 1.0 and ES 2.0 only)
@@ -288,7 +288,7 @@ bool ImGui_ImplOpenGL3_InitLoader()
 {
     // Initialize our loader
 #ifdef IMGUI_IMPL_OPENGL_LOADER_IMGL3W
-    if (glGetIntegerv == nullptr && imgl3wInit() != 0)
+    if (glGetIntegerv == NULL && imgl3wInit() != 0)
     {
         fprintf(stderr, "Failed to initialize OpenGL loader!\n");
         return false;
@@ -302,7 +302,7 @@ bool    ImGui_ImplOpenGL3_Init(const char* glsl_version)
 {
     ImGuiIO& io = ImGui::GetIO();
     IMGUI_CHECKVERSION();
-    IM_ASSERT(io.BackendRendererUserData == nullptr && "Already initialized a renderer backend!");
+    IM_ASSERT(io.BackendRendererUserData == NULL && "Already initialized a renderer backend!");
 
     // Initialize loader
     if (!ImGui_ImplOpenGL3_InitLoader())
@@ -370,7 +370,7 @@ bool    ImGui_ImplOpenGL3_Init(const char* glsl_version)
 
     // Store GLSL version string so we can refer to it later in case we recreate shaders.
     // Note: GLSL version is NOT the same as GL version. Leave this to nullptr if unsure.
-    if (glsl_version == nullptr)
+    if (glsl_version == NULL)
     {
 #if defined(IMGUI_IMPL_OPENGL_ES2)
         glsl_version = "#version 100";
@@ -402,7 +402,7 @@ bool    ImGui_ImplOpenGL3_Init(const char* glsl_version)
     for (GLint i = 0; i < num_extensions; i++)
     {
         const char* extension = (const char*)glGetStringi(GL_EXTENSIONS, i);
-        if (extension != nullptr && strcmp(extension, "GL_ARB_clip_control") == 0)
+        if (extension != NULL && strcmp(extension, "GL_ARB_clip_control") == 0)
             bd->HasClipOrigin = true;
     }
 #endif
@@ -413,12 +413,12 @@ bool    ImGui_ImplOpenGL3_Init(const char* glsl_version)
 void    ImGui_ImplOpenGL3_Shutdown()
 {
     ImGui_ImplOpenGL3_Data* bd = ImGui_ImplOpenGL3_GetBackendData();
-    IM_ASSERT(bd != nullptr && "No renderer backend to shutdown, or already shutdown?");
+    IM_ASSERT(bd != NULL && "No renderer backend to shutdown, or already shutdown?");
     ImGuiIO& io = ImGui::GetIO();
 
     ImGui_ImplOpenGL3_DestroyDeviceObjects();
-    io.BackendRendererName = nullptr;
-    io.BackendRendererUserData = nullptr;
+    io.BackendRendererName = NULL;
+    io.BackendRendererUserData = NULL;
     io.BackendFlags &= ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures);
     IM_DELETE(bd);
 }
@@ -426,7 +426,7 @@ void    ImGui_ImplOpenGL3_Shutdown()
 void    ImGui_ImplOpenGL3_NewFrame()
 {
     ImGui_ImplOpenGL3_Data* bd = ImGui_ImplOpenGL3_GetBackendData();
-    IM_ASSERT(bd != nullptr && "Context or backend not initialized! Did you call ImGui_ImplOpenGL3_Init()?");
+    IM_ASSERT(bd != NULL && "Context or backend not initialized! Did you call ImGui_ImplOpenGL3_Init()?");
 
     ImGui_ImplOpenGL3_InitLoader(); // Lazily init loader if not already done for e.g. DLL boundaries.
 
@@ -526,10 +526,16 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
 
     // Catch up with texture updates. Most of the times, the list will have 1 element with an OK status, aka nothing to do.
     // (This almost always points to ImGui::GetPlatformIO().Textures[] but is part of ImDrawData to allow overriding or disabling texture updates).
-    if (draw_data->Textures != nullptr)
-        for (ImTextureData* tex : *draw_data->Textures)
+    if (draw_data->Textures != NULL)
+    {
+        ImVector<ImTextureData*>& textures = *draw_data->Textures;
+        for (int i = 0; i < textures.Size; ++i)
+        {
+            ImTextureData* tex = textures[i];
             if (tex->Status != ImTextureStatus_OK)
                 ImGui_ImplOpenGL3_UpdateTexture(tex);
+        }
+    }
 
     // Backup GL state
     GLenum last_active_texture; glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint*)&last_active_texture);
@@ -603,12 +609,12 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
             if (bd->VertexBufferSize < vtx_buffer_size)
             {
                 bd->VertexBufferSize = vtx_buffer_size;
-                GL_CALL(glBufferData(GL_ARRAY_BUFFER, bd->VertexBufferSize, nullptr, GL_STREAM_DRAW));
+                GL_CALL(glBufferData(GL_ARRAY_BUFFER, bd->VertexBufferSize, NULL, GL_STREAM_DRAW));
             }
             if (bd->IndexBufferSize < idx_buffer_size)
             {
                 bd->IndexBufferSize = idx_buffer_size;
-                GL_CALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, bd->IndexBufferSize, nullptr, GL_STREAM_DRAW));
+                GL_CALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, bd->IndexBufferSize, NULL, GL_STREAM_DRAW));
             }
             GL_CALL(glBufferSubData(GL_ARRAY_BUFFER, 0, vtx_buffer_size, (const GLvoid*)draw_list->VtxBuffer.Data));
             GL_CALL(glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, idx_buffer_size, (const GLvoid*)draw_list->IdxBuffer.Data));
@@ -622,7 +628,7 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
         for (int cmd_i = 0; cmd_i < draw_list->CmdBuffer.Size; cmd_i++)
         {
             const ImDrawCmd* pcmd = &draw_list->CmdBuffer[cmd_i];
-            if (pcmd->UserCallback != nullptr)
+            if (pcmd->UserCallback != NULL)
             {
                 // User callback, registered via ImDrawList::AddCallback()
                 // (ImDrawCallback_ResetRenderState is a special callback value used by the user to request the renderer to reset render state.)
@@ -715,7 +721,7 @@ void ImGui_ImplOpenGL3_UpdateTexture(ImTextureData* tex)
     {
         // Create and upload new texture to graphics system
         //IMGUI_DEBUG_LOG("UpdateTexture #%03d: WantCreate %dx%d\n", tex->UniqueID, tex->Width, tex->Height);
-        IM_ASSERT(tex->TexID == 0 && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->TexID == 0 && tex->BackendUserData == NULL);
         IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
         const void* pixels = tex->GetPixels();
         GLuint gl_texture_id = 0;
@@ -759,8 +765,10 @@ void ImGui_ImplOpenGL3_UpdateTexture(ImTextureData* tex)
 #else
         // GL ES doesn't have GL_UNPACK_ROW_LENGTH, so we need to (A) copy to a contiguous buffer or (B) upload line by line.
         ImGui_ImplOpenGL3_Data* bd = ImGui_ImplOpenGL3_GetBackendData();
-        for (ImTextureRect& r : tex->Updates)
+        ImVector<ImTextureRect>& updates = tex->Updates;
+        for (int i = 0; i < updates.Size; ++i)
         {
+            ImTextureRect& r = updates[i];
             const int src_pitch = r.w * tex->BytesPerPixel;
             bd->TempBuffer.resize(r.h * src_pitch);
             char* out_p = bd->TempBuffer.Data;
@@ -790,7 +798,7 @@ static bool CheckShader(GLuint handle, const char* desc)
     {
         ImVector<char> buf;
         buf.resize((int)(log_length + 1));
-        glGetShaderInfoLog(handle, log_length, nullptr, (GLchar*)buf.begin());
+        glGetShaderInfoLog(handle, log_length, NULL, (GLchar*)buf.begin());
         fprintf(stderr, "%s\n", buf.begin());
     }
     return (GLboolean)status == GL_TRUE;
@@ -809,7 +817,7 @@ static bool CheckProgram(GLuint handle, const char* desc)
     {
         ImVector<char> buf;
         buf.resize((int)(log_length + 1));
-        glGetProgramInfoLog(handle, log_length, nullptr, (GLchar*)buf.begin());
+        glGetProgramInfoLog(handle, log_length, NULL, (GLchar*)buf.begin());
         fprintf(stderr, "%s\n", buf.begin());
     }
     return (GLboolean)status == GL_TRUE;
@@ -937,8 +945,8 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
         "}\n";
 
     // Select shaders matching our GLSL versions
-    const GLchar* vertex_shader = nullptr;
-    const GLchar* fragment_shader = nullptr;
+    const GLchar* vertex_shader = NULL;
+    const GLchar* fragment_shader = NULL;
     if (glsl_version < 130)
     {
         vertex_shader = vertex_shader_glsl_120;
@@ -964,7 +972,7 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
     const GLchar* vertex_shader_with_version[2] = { bd->GlslVersionString, vertex_shader };
     GLuint vert_handle;
     GL_CALL(vert_handle = glCreateShader(GL_VERTEX_SHADER));
-    glShaderSource(vert_handle, 2, vertex_shader_with_version, nullptr);
+    glShaderSource(vert_handle, 2, vertex_shader_with_version, NULL);
     glCompileShader(vert_handle);
     if (!CheckShader(vert_handle, "vertex shader"))
         return false;
@@ -972,7 +980,7 @@ bool    ImGui_ImplOpenGL3_CreateDeviceObjects()
     const GLchar* fragment_shader_with_version[2] = { bd->GlslVersionString, fragment_shader };
     GLuint frag_handle;
     GL_CALL(frag_handle = glCreateShader(GL_FRAGMENT_SHADER));
-    glShaderSource(frag_handle, 2, fragment_shader_with_version, nullptr);
+    glShaderSource(frag_handle, 2, fragment_shader_with_version, NULL);
     glCompileShader(frag_handle);
     if (!CheckShader(frag_handle, "fragment shader"))
         return false;
@@ -1021,9 +1029,13 @@ void    ImGui_ImplOpenGL3_DestroyDeviceObjects()
     if (bd->ShaderHandle)   { glDeleteProgram(bd->ShaderHandle); bd->ShaderHandle = 0; }
 
     // Destroy all textures
-    for (ImTextureData* tex : ImGui::GetPlatformIO().Textures)
+    ImVector<ImTextureData*>& textures = ImGui::GetPlatformIO().Textures;
+    for (int i = 0; i < textures.Size; ++i)
+    {
+        ImTextureData* tex = textures[i];
         if (tex->RefCount == 1)
             ImGui_ImplOpenGL3_DestroyTexture(tex);
+    }
 }
 
 //-----------------------------------------------------------------------------
