@@ -147,7 +147,7 @@ int main()
         if (ImGui::Button("Load Model"))
         {
             IGFD::FileDialogConfig cfg;
-            cfg.path = ".";            // start in current directory
+            cfg.path = "./model";      // start in current directory
             cfg.fileName = "";         // no default filename
             cfg.filePathName = "";     // ignore pre–set full path
             cfg.countSelectionMax = 1; // only allow one file
@@ -191,6 +191,7 @@ int main()
                 }
             }
             // Close the dialog to reset its state
+            modelLoaded = true;
             IGFD::FileDialog::Instance()->Close();
         }
 
@@ -408,10 +409,12 @@ void loadBDAEModel(const char *fname)
 
     struct Vertex
     {
-        float x, y, z;    // 12 bytes
-        float nx, ny, nz; // 12 bytes
-        float u, v;       // 8 bytes
-        float padding;    // 4 bytes (maybe) or alignment
+        float x, y, z;        // 12 bytes
+        float nx, ny, nz;     // 12 bytes
+        float u, v;           // 8 bytes
+        float extra1, extra2; // ?
+        float extra3, extra4; // ?
+        float extra5, extra6; // ?
     };
 
     int vertexOffset = 0;
@@ -461,18 +464,34 @@ void loadBDAEModel(const char *fname)
                     }
                 }
 
+                int bytesPerVertex = 56;
+                while (bytesPerVertex >= 0)
+                {
+                    bool valid = true;
+
+                    for (int i = 0; i < submeshCount; ++i)
+                        if ((myFile.RemovableBuffersInfo[i * 4] - 4) % bytesPerVertex != 0)
+                            valid = false;
+
+                    if (valid && (bytesPerVertex == 56 || bytesPerVertex == 36 || bytesPerVertex == 32))
+                        break;
+
+                    --bytesPerVertex;
+                }
+
                 std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
+                std::cout << "1 Vertex is " << bytesPerVertex << std::endl;
                 std::cout << textureName << std::endl;
 
                 for (int i = 0; i < submeshCount; i++)
                 {
                     unsigned char *submeshVertexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2] + 4;
                     unsigned int submeshVertexDataSize = myFile.RemovableBuffersInfo[i * 4] - 4;
-                    unsigned int submeshVertexCount = submeshVertexDataSize / sizeof(Vertex);
+                    unsigned int submeshVertexCount = submeshVertexDataSize / bytesPerVertex;
 
                     for (int j = 0; j < submeshVertexCount; j++)
                     {
-                        float *v = reinterpret_cast<float *>(submeshVertexDataPtr + j * sizeof(Vertex));
+                        float *v = reinterpret_cast<float *>(submeshVertexDataPtr + j * bytesPerVertex);
                         vertices.push_back(v[0]); // x
                         vertices.push_back(v[1]); // y
                         vertices.push_back(v[2]); // z
@@ -540,13 +559,10 @@ void loadBDAEModel(const char *fname)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load(textureName.c_str(), &width, &height, &nrChannels, 0);    // load the image and its parameters
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data); // create and store texture image inside the texture object
-    glGenerateMipmap(GL_TEXTURE_2D);                                                          // generate a mipmap
-    stbi_image_free(data);
-
-    // 5. remember state
-    modelLoaded = true;
+    int width, height, nrChannels, format;
+    unsigned char *data = stbi_load(textureName.c_str(), &width, &height, &nrChannels, 0); // load the image and its parameters
+    format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data); // create and store texture image inside the texture object
+    glGenerateMipmap(GL_TEXTURE_2D);
     currentFile = fname;
 }
