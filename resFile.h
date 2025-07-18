@@ -14,7 +14,7 @@ struct FileHeaderData
     unsigned int sizeOfFile;
     unsigned int numOffsets;
     unsigned int origin;
-    Access<Access<Access<int> > > offsets;
+    Access<Access<Access<int>>> offsets;
     Access<int> stringData;
     Access<char> data;
     Access<char> relatedFiles;
@@ -50,13 +50,14 @@ struct File : public Access<FileHeaderData>
     static bool ExtractStringTable;
 
     bool IsValid;
+    void *DataBuffer;
     void *OffsetTable;
     void *StringTable;
 
     File() : IsValid(false), OffsetTable(NULL) {}
 
     File(void *ptr, unsigned long *removableBuffersInfo = 0, void **removableBuffers = 0, bool useSeparatedAllocationForRemovableBuffers = false, void *offsetTable = NULL, void *stringTable = NULL)
-        : Access<FileHeaderData>(ptr), IsValid(false), OffsetTable(offsetTable), StringTable(stringTable), RemovableBuffersInfo(removableBuffersInfo), RemovableBuffers(removableBuffers), UseSeparatedAllocationForRemovableBuffers(useSeparatedAllocationForRemovableBuffers)
+        : Access<FileHeaderData>(ptr), DataBuffer(ptr), IsValid(false), OffsetTable(offsetTable), StringTable(stringTable), RemovableBuffersInfo(removableBuffersInfo), RemovableBuffers(removableBuffers), UseSeparatedAllocationForRemovableBuffers(useSeparatedAllocationForRemovableBuffers)
     {
         if (ptr)
             IsValid = (Init() == 0);

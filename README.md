@@ -4,7 +4,9 @@
 
 ### Project overview
 
-This project implements a 3D model viewer for .bdae file format, based on the .bdae parser from Gameloft’s game engine, and compiled into a standalone application. The parser loads the file sections into memory and processes file data, applying offset correction and extracting the strings that store the core information for rendering the 3D model. Originally borrowed from the source code of another Gameloft title, it has been modified to support the 64-bit .bdae file version 0.0.0.779 used in Order and Chaos Online v4.2.5. After reading the below documentation, you may clearly understand what is the .bdae file format, which is a result of my combined reverse-engineering and game-engine source code research.
+This project implements a 3D model viewer for the .bdae file format, based on OpenGL 3.3 + the .bdae parser from Gameloft’s game engine, and is compiled into a standalone application. The parser does the initialization: loads the file sections into memory and processes file data, applying offset correction and extracting the strings. Originally borrowed from the source code of another Gameloft title, it has been modified to support the 64-bit .bdae file version 0.0.0.779 used in Order and Chaos Online v.4.2.5a. The viewer displays the model: using the output of the parser, it builds the mesh vertex and index data, loads associated texture(s), and renders the 3D mesh with the OpenGL backend.
+
+After reading the below documentation, you may clearly understand what is the .bdae file format, which is a result of my combined reverse-engineering and game-engine source code research.
 
 ### Result
 
@@ -35,7 +37,7 @@ The .bdae parser consists of:
 
  These files were taken from the Heroes of Order and Chaos game source code and reworked. Their .bdae parser was implemented as a utility module of the Glitch Engine, accessible under the `glitch::res` namespace. It is the absolute __entry point for a .bdae file in the game, performing its in-memory initialization__. When the world map loads, the very first step is to correctly load all game resources, and for .bdae files, this parser is responsible for that.
 
- My target was to build a parser independent of the Glitch Engine that would correctly parse .bdae files from the latest OaC version 4.2.5. In order to achieve this, the __parser had to be hardly modified: handled .bdae version difference (OaC uses v0.0.0.779 against v0.0.0.884 in HoC) and architecture difference (old OaC v1.0.3 and HoC .bdae files are designed to be parsed by a 32-bit game engine, while newer OaC 4.2.5 files expect a 64-bit game engine), Glitch Engine dependency removed, refactored and highly annotated__. Advanced explanation – it appears that inside a .bdae version there are 4 possible subversions / architecture configurations: big-endian 32-bit, big-endian 64-bit, little-endian 32-bit, and little-endian 64-bit. Attempting to parse a .bdae file of the wrong architecture would lead to undefined behavior, as 32-bit systems are written for a pointer size of 4 bytes, and in 64-bit systems it is 8 bytes, resulting in incorrect offsets. OaC v1.0.3 and HoC both use little-endian 32-bit .bdae files, while OaC v4.2.5 uses little-endian 64-bit (both of the .bdae version 0.0.0.79), i.e., the old parser is incompatible with the latest OaC .bdae files. This issue has been resolved.
+ My target was to build a parser independent of the Glitch Engine that would correctly parse .bdae files from the latest OaC version 4.2.5a. In order to achieve this, the __parser had to be hardly modified: handled .bdae version difference (OaC uses v0.0.0.779 against v0.0.0.884 in HoC) and architecture difference (old OaC v1.0.3 and HoC .bdae files are designed to be parsed by a 32-bit game engine, while newer OaC v.4.2.5a files expect a 64-bit game engine), Glitch Engine dependency removed, refactored and highly annotated__. Advanced explanation – it appears that inside a .bdae version there are 4 possible subversions / architecture configurations: big-endian 32-bit, big-endian 64-bit, little-endian 32-bit, and little-endian 64-bit. Attempting to parse a .bdae file of the wrong architecture would lead to undefined behavior, as 32-bit systems are written for a pointer size of 4 bytes, and in 64-bit systems it is 8 bytes, resulting in incorrect offsets. OaC v1.0.3 and HoC both use little-endian 32-bit .bdae files, while OaC v.4.2.5a uses little-endian 64-bit (both of the .bdae version 0.0.0.79), i.e., the old parser is incompatible with the latest OaC .bdae files. This issue has been resolved.
 
 __How does the .bdae parser work?__
 
@@ -53,7 +55,7 @@ The .bdae viewer consists of:
 - `shader.h`, `shader model.vs`, `shader model.fs`, (`shader lightcube.vs`, `shader lightcube.fs`) – implementation of the graphics pipeline. OpenGL requires GLSL source code for at least one vertex shader and one fragment shader.
 - `camera.h` – implementation of the camera system. OpenGL by itself is not familiar with the concept of a camera, so we simulate it using Euler angles.
 - `light.h` – light settings for the Phong lighting model and definition of the light source (a light cube is displayed for reference).
-- `stb_image.h` – single-header library for loading texture images.
+- `libs/stb_image.h` – single-header library for loading texture images.
 - `libs/imgui` – Dear ImGui library for file browsing and settings UI.
 
 These files, except for the last 2 libraries, were written from scratch. Currently, the functionality includes loading a selected .bdae model, displaying a mesh with a texture applied, and allowing the user to fly around it.
@@ -70,7 +72,7 @@ To implement the 3D model viewer, to this basic OpenGL program workflow we need 
 
 ### Manual
 
-The project was implemented for my personal interest, though I provide a manual for the Linux environment I use. However, it should work identically on any Ubuntu‑based system and be easy to figure out for other OS. For copyright concerns, I uploaded the game models (which can be opened with this .bdae 3D model viewer) separately. All of them are sourced from __OaC v4.2.5a__.
+The project was implemented for my personal interest, though I provide a manual for the Linux environment I use. However, it should work identically on any Ubuntu‑based system and be easy to figure out for other OS. For copyright concerns, I uploaded the game models (which can be opened with this .bdae 3D model viewer) separately. All of them are sourced from __OaC v.4.2.5a__. For easier searching, I carefully reorganized and renamed the models according to their in-game names.
 
 Compatibility: __.bdae v0.0.0.779__  
 Compiler: __g++ 11.4.0__  

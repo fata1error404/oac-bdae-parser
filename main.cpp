@@ -13,7 +13,7 @@
 #include "libs/imgui/ImGuiFileDialog.h"
 
 #define STB_IMAGE_IMPLEMENTATION // define a STB_IMAGE_IMPLEMENTATION macro (to tell the compiler to include function implementations)
-#include "stb_image.h"           // library for image loading
+#include "libs/stb_image.h"      // library for image loading
 #include "shader.h"              // implementation of the graphics pipeline
 #include "camera.h"              // implementation of the camera system
 #include "light.h"               // definition of the light settings and light cube
@@ -54,10 +54,11 @@ bool modelLoaded = false;
 std::string currentFile;
 std::string fileName;
 int fileSize = 0;
-int verticesNumber = 0, facesNumber = 0;
-unsigned int VAO = 0, VBO = 0, EBO = 0, texture = 0;
+int verticesNumber = 0, facesNumber = 0, textureCount;
+unsigned int VAO = 0, VBO = 0, EBO = 0;
 std::vector<float> vertices;
 std::vector<unsigned int> indices;
+std::vector<unsigned int> textures;
 
 int main()
 {
@@ -147,11 +148,11 @@ int main()
         if (ImGui::Button("Load Model"))
         {
             IGFD::FileDialogConfig cfg;
-            cfg.path = "./model";      // start in current directory
-            cfg.fileName = "";         // no default filename
-            cfg.filePathName = "";     // ignore pre–set full path
-            cfg.countSelectionMax = 1; // only allow one file
-            cfg.userDatas = nullptr;   // no user data
+            cfg.path = "./model/creature/pet"; // start in current directory
+            cfg.fileName = "";                 // no default filename
+            cfg.filePathName = "";             // ignore pre–set full path
+            cfg.countSelectionMax = 1;         // only allow one file
+            cfg.userDatas = nullptr;           // no user data
             cfg.flags = ImGuiFileDialogFlags_None;
             cfg.sidePane = nullptr;           // no extra pane
             cfg.sidePaneWidth = 250.0f;       // (unused)
@@ -229,6 +230,15 @@ int main()
         if (!displayBaseMesh)
         {
             ourShader.setInt("renderMode", 1);
+            ourShader.setInt("textureCount", (int)textures.size());
+
+            for (int i = 0; i < (int)textures.size(); ++i)
+            {
+                glActiveTexture(GL_TEXTURE0 + i);                   // activate texture unit i
+                glBindTexture(GL_TEXTURE_2D, textures[i]);          // bind texture
+                ourShader.setInt("texture" + std::to_string(i), i); // assign texture unit to sampler
+            }
+
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
         }
@@ -376,6 +386,8 @@ void processInput(GLFWwindow *window)
 
 void loadBDAEModel(const char *fname)
 {
+    currentFile = fname;
+
     // 1) Clear old GPU buffers if any
     if (VAO)
     {
@@ -392,34 +404,25 @@ void loadBDAEModel(const char *fname)
         glDeleteBuffers(1, &EBO);
         EBO = 0;
     }
-    if (texture)
+    if (!textures.empty())
     {
-        glDeleteTextures(1, &texture);
-        texture = 0;
+        std::cout << "CLEANING" << std::endl;
+        glDeleteTextures((GLsizei)textures.size(), textures.data());
+        textures.clear();
     }
 
-    std::string textureName;
+    std::vector<std::string> textureNames;
     vertices.clear();
     indices.clear();
-    verticesNumber = facesNumber = fileSize = 0;
+    verticesNumber = facesNumber = fileSize = textureCount = 0;
 
-    // 2) Load the .bdae exactly like you already do...
+    // 2) Load the .bdae exactly like you already do...f
     //    Fill `vertices` & `indices` vectors, compute verticesNumber, facesNumber, fileSize
     //    (You can copy–paste your existing block here.)
 
-    struct Vertex
-    {
-        float x, y, z;        // 12 bytes
-        float nx, ny, nz;     // 12 bytes
-        float u, v;           // 8 bytes
-        float extra1, extra2; // ?
-        float extra3, extra4; // ?
-        float extra5, extra6; // ?
-    };
+    IReadResFile *archiveFile = createReadFile(fname);
 
     int vertexOffset = 0;
-
-    IReadResFile *archiveFile = createReadFile(fname);
 
     if (archiveFile)
     {
@@ -438,58 +441,28 @@ void loadBDAEModel(const char *fname)
 
             if (result != 1)
             {
-                int submeshCount = 0;
+                int submeshCount, meshMetadataOffset;
+                char *ptr = (char *)myFile.DataBuffer + 80 + 120;
+                memcpy(&submeshCount, ptr, sizeof(int));
+                memcpy(&meshMetadataOffset, ptr + 4, sizeof(int));
 
-                for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
+                int submeshVertexCount[submeshCount], submeshMetadataOffset[submeshCount];
+
+                for (int i = 0; i < submeshCount; i++)
                 {
-                    std::string &s = myFile.StringStorage[i];
-
-                    // must be at least 5 chars long to hold "-mesh"
-                    if (!s.empty() && s[0] != '#' && s.length() >= 5 && s.rfind("-mesh") == s.length() - 5)
-                        ++submeshCount;
-                    // look for any string ending with .tga
-                    else if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0)
-                    {
-                        textureName = s;
-
-                        // replace ".tga" with ".png"
-                        textureName.replace(textureName.length() - 4, 4, ".png");
-
-                        // ensure it starts with "texture/"
-                        const std::string prefix = "texture/";
-                        if (textureName.rfind(prefix, 0) != 0) // doesn't already start with it
-                        {
-                            textureName = prefix + textureName;
-                        }
-                    }
-                }
-
-                int bytesPerVertex = 56;
-                while (bytesPerVertex >= 0)
-                {
-                    bool valid = true;
-
-                    for (int i = 0; i < submeshCount; ++i)
-                        if ((myFile.RemovableBuffersInfo[i * 4] - 4) % bytesPerVertex != 0)
-                            valid = false;
-
-                    if (valid && (bytesPerVertex == 56 || bytesPerVertex == 36 || bytesPerVertex == 32))
-                        break;
-
-                    --bytesPerVertex;
+                    memcpy(&submeshMetadataOffset[i], ptr + 4 + meshMetadataOffset + 20 + i * 24, sizeof(int));
+                    memcpy(&submeshVertexCount[i], ptr + 4 + meshMetadataOffset + 20 + i * 24 + submeshMetadataOffset[i] + 4, sizeof(int));
                 }
 
                 std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
-                std::cout << "1 Vertex is " << bytesPerVertex << std::endl;
-                std::cout << textureName << std::endl;
 
                 for (int i = 0; i < submeshCount; i++)
                 {
                     unsigned char *submeshVertexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2] + 4;
                     unsigned int submeshVertexDataSize = myFile.RemovableBuffersInfo[i * 4] - 4;
-                    unsigned int submeshVertexCount = submeshVertexDataSize / bytesPerVertex;
+                    unsigned int bytesPerVertex = submeshVertexDataSize / submeshVertexCount[i];
 
-                    for (int j = 0; j < submeshVertexCount; j++)
+                    for (int j = 0; j < submeshVertexCount[i]; j++)
                     {
                         float *v = reinterpret_cast<float *>(submeshVertexDataPtr + j * bytesPerVertex);
                         vertices.push_back(v[0]); // x
@@ -513,8 +486,47 @@ void loadBDAEModel(const char *fname)
                     for (int k = 0; k < submeshIndexCount; k++)
                         indices.push_back((unsigned int)rawIndices[k] + i * vertexOffset);
 
-                    vertexOffset += submeshVertexCount;
+                    vertexOffset += submeshVertexCount[i];
                 }
+
+                // retrieve textures
+                int textureMetadataOffset;
+                ptr = (char *)myFile.DataBuffer + 80 + 96;
+                memcpy(&textureCount, ptr, sizeof(int));
+                memcpy(&textureMetadataOffset, ptr + 4, sizeof(int));
+
+                std::cout << "TEXTURES: " << textureCount << std::endl;
+                textures.resize(textureCount);
+
+                for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
+                {
+                    std::string &s = myFile.StringStorage[i];
+
+                    if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
+                    {
+                        // build the png name
+                        std::string tex = s;
+                        tex.replace(tex.length() - 4, 4, ".png");
+
+                        // ensure it starts with "texture/"
+                        const std::string prefix = "texture/";
+                        if (tex.rfind(prefix, 0) != 0)
+                            tex = prefix + tex;
+
+                        // append to our list
+                        // textureNames.push_back(tex);
+
+                        if (std::find(textureNames.begin(),
+                                      textureNames.end(),
+                                      tex) == textureNames.end())
+                        {
+                            textureNames.push_back(tex);
+                        }
+                    }
+                }
+
+                for (int i = 0; i < (int)textureNames.size(); ++i)
+                    std::cout << textureNames[i] << std::endl;
 
                 verticesNumber = vertices.size() / 8;
                 facesNumber = indices.size() / 3;
@@ -527,16 +539,16 @@ void loadBDAEModel(const char *fname)
     }
 
     // 3. setup buffers
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    glGenVertexArrays(1, &VAO); // generate a Vertex Attribute Object to store vertex attribute configurations
+    glGenBuffers(1, &VBO);      // generate a Vertex Buffer Object to store vertex data
+    glGenBuffers(1, &EBO);      // generate an Element Buffer Object to store index data
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(VAO); // bind the VAO first so that subsequent VBO bindings and vertex attribute configurations are stored in it correctly
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);                                                              // bind the VBO
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW); // copy vertex data into the GPU buffer's memory
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0); // define the layout of the vertex data (vertex attribute configuration): index 0, 3 components per vertex, type float, not normalized, with a stride of 8 * sizeof(float) (next vertex starts after 8 floats), and an offset of 0 in the buffer
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
@@ -546,23 +558,33 @@ void loadBDAEModel(const char *fname)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
-    // 4. load texture
-    unsigned int texture;
-    glGenTextures(1, &texture);            // generate a texture object to store texture data
-    glBindTexture(GL_TEXTURE_2D, texture); // bind the texture object so that all upcoming texture operations affect this texture
+    // 4. load texture(s)
+    glGenTextures(textureCount, textures.data()); // generate and store texture ID(s)
 
-    // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // for s (x) axis
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // for t (y) axis
+    for (int i = 0; i < textureCount; i++)
+    {
+        glBindTexture(GL_TEXTURE_2D, textures[i]); // bind the texture ID so that all upcoming texture operations affect this texture
 
-    // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        // set the texture wrapping parameters
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // for s (x) axis
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // for t (y) axis
 
-    int width, height, nrChannels, format;
-    unsigned char *data = stbi_load(textureName.c_str(), &width, &height, &nrChannels, 0); // load the image and its parameters
-    format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data); // create and store texture image inside the texture object
-    glGenerateMipmap(GL_TEXTURE_2D);
-    currentFile = fname;
+        // set texture filtering parameters
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        int width, height, nrChannels, format;
+        unsigned char *data = stbi_load(textureNames[i].c_str(), &width, &height, &nrChannels, 0); // load the image and its parameters
+
+        if (!data)
+        {
+            std::cerr << "Failed to load texture: " << textureNames[i] << "\n";
+            continue;
+        }
+
+        format = (nrChannels == 4) ? GL_RGBA : GL_RGB;                                            // image format
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data); // create and store texture image inside the texture object (upload to GPU)
+        glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(data);
+    }
 }
