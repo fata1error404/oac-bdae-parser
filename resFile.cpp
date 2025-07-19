@@ -207,8 +207,8 @@ int File::Init(IReadResFile *file)
                  stringBuffer);
 
     // causes wrong offset for the first 2 offset entries
-    // delete[] offsetBuffer;
-    // OffsetTable = NULL;
+    delete[] offsetBuffer;
+    OffsetTable = NULL;
 
     delete[] stringBuffer;
     StringTable = NULL;
@@ -290,7 +290,7 @@ int File::Init()
             // loop through each entry in the offset table
             for (unsigned int i = 0; i < header->numOffsets; ++i)
             {
-                Access<Access<int> > &offset = header->offsets[i]; // i-th offset table entry: an outer Access<Access<int>> object that stores the offset to an inner Access<int> object, which itself holds the offset to actual data
+                Access<Access<int>> &offset = header->offsets[i]; // i-th offset table entry: an outer Access<Access<int>> object that stores the offset to an inner Access<int> object, which itself holds the offset to actual data
 
                 /* FIRST PASS. Outer pointer.
                    Process offptr handling cases where it points to different sections of the .bdae file.
@@ -327,9 +327,9 @@ int File::Init()
 
                         StringStorage.push_back(str);
 
-                        const char *cstr = StringStorage.back().c_str();                                  // get a C-string pointer
-                        Access<Access<int> > newPtr(const_cast<void *>(static_cast<const void *>(cstr))); // wrap the pointer in an outer Access<Access<int>> object
-                        offset = newPtr;                                                                  // this offset table entry now points to the inner object (we get the access to the inner pointer, but not yet to the actual string data)
+                        const char *cstr = StringStorage.back().c_str();                                 // get a C-string pointer
+                        Access<Access<int>> newPtr(const_cast<void *>(static_cast<const void *>(cstr))); // wrap the pointer in an outer Access<Access<int>> object
+                        offset = newPtr;                                                                 // this offset table entry now points to the inner object (we get the access to the inner pointer, but not yet to the actual string data)
                     }
                     // Removable section
                     else if (offptr > (unsigned int)SizeUnRemovable)
@@ -457,7 +457,7 @@ int File::Init()
                 }
             }
 
-            Access<Access<int> > &offset = header->offsets[2];
+            Access<Access<int>> &offset = header->offsets[2];
         }
         /* 7b. This occurs when a temporary buffer is not used. The offset table is in-place — directly in the file’s main memory buffer — no separate deletable buffer (OffsetTable == NULL), so no need to retrieve or correct anything. Simply convert relative offsets to direct pointers. */
         else
@@ -474,7 +474,7 @@ int File::Init()
             // loop through each entry in the offset table
             for (unsigned int i = 0; i < header->numOffsets; ++i)
             {
-                Access<Access<int> > &offset = header->offsets[i];
+                Access<Access<int>> &offset = header->offsets[i];
 
                 offset.OffsetToPtr(header); // convert outer pointer
 

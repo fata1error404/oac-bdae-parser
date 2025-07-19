@@ -99,17 +99,20 @@ int main()
 
     // apply styles to have a grayscale theme
     ImGuiStyle &style = ImGui::GetStyle();
-    style.WindowRounding = 4.0f;                                               // border radius
-    style.WindowBorderSize = 0.0f;                                             // border width
-    style.Colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);              // text color
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);      // background color of the panel's main content area
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f); // background color of the panel's title bar
-    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);  // .. (when panel is hidden)
-    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);       // .. (when panel is overlayed and inactive)
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);           // background color of input fields, checkboxes
-    style.Colors[ImGuiCol_Button] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);            // background color of buttons
-    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);         // mark color in checkboxes
-    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f); // background color of table headers (for file browsing dialog)
+    style.WindowRounding = 4.0f;                                              // border radius
+    style.WindowBorderSize = 0.0f;                                            // border width
+    style.Colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);             // text color
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);         // background color of the panel's main content area
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);    // background color of the panel's title bar
+    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f); // .. (when panel is hidden)
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);          // .. (when panel is overlayed and inactive)
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);          // background color of input fields, checkboxes
+    style.Colors[ImGuiCol_Button] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);           // background color of buttons
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);        // mark color in checkboxes
+    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.65f, 0.65f, 0.65f, 1.0f); // background color of table headers (for file browsing dialog)
+    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);   // background color of scrollbar track (for file browsing dialog)
+    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.65f, 0.65f, 0.65f, 1.0f); // background color of scrollbar thumb (for file browsing dialog)
+    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);       // background color of tooltips (for file browsing dialog)
 
     // configure file browsing dialog
     IGFD::FileDialogConfig cfg;
@@ -175,7 +178,7 @@ int main()
         ImGui::SetNextWindowSize(dialogSize, ImGuiCond_Always);
         ImGui::SetNextWindowPos(dialogPos, ImGuiCond_Always);
 
-        // if the dialog is open
+        // if the dialog is opened with the load button, show it
         if (IGFD::FileDialog::Instance()->Display("File_Browsing_Dialog", ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
         {
             // if selection is confirmed (by OK or double-click), process it
@@ -415,128 +418,132 @@ void loadBDAEModel(const char *fpath)
     std::vector<std::string> textureNames;
 
     // 2. load and parse the .bdae file, building the mesh vertex and index data
-    IReadResFile *archiveFile = createReadFile(fpath);
+    CPackPatchReader *bdaeArchive = new CPackPatchReader(fpath, true, false);           // open outer .bdae archive file
+    IReadResFile *bdaeFile = bdaeArchive->openFile("little_endian_not_quantized.bdae"); // open inner .bdae file
 
-    if (archiveFile)
+    if (bdaeFile)
     {
-        CPackPatchReader *archiveReader = new CPackPatchReader(archiveFile, true, false);
-        archiveFile->drop();
+        File myFile;
+        int result = myFile.Init(bdaeFile); // run the parser
 
-        IReadResFile *bdaeFile = archiveReader->openFile("little_endian_not_quantized.bdae");
+        std::cout << "\n"
+                  << (result != 1 ? "PARSING SUCCESS" : "PARSING ERROR") << std::endl;
 
-        if (bdaeFile)
+        if (result != 1)
         {
-            File myFile;
-            int result = myFile.Init(bdaeFile);
+            // retrieve the number of submeshes and vertex count for each one
+            int submeshCount, meshMetadataOffset;
+            char *ptr = (char *)myFile.DataBuffer + 80 + 120; // points to mesh info in the Data section
+            memcpy(&submeshCount, ptr, sizeof(int));
+            memcpy(&meshMetadataOffset, ptr + 4, sizeof(int));
 
-            std::cout << "\n"
-                      << (result != 1 ? "PARSING SUCCESS" : "PARSING ERROR") << std::endl;
+            int submeshVertexCount[submeshCount], subsubmeshCount[submeshCount], submeshMetadataOffset[submeshCount];
 
-            if (result != 1)
+            for (int i = 0; i < submeshCount; i++)
             {
-                int submeshCount, meshMetadataOffset;
-                char *ptr = (char *)myFile.DataBuffer + 80 + 120;
-                memcpy(&submeshCount, ptr, sizeof(int));
-                memcpy(&meshMetadataOffset, ptr + 4, sizeof(int));
-
-                int submeshVertexCount[submeshCount], submeshMetadataOffset[submeshCount];
-
-                for (int i = 0; i < submeshCount; i++)
-                {
-                    memcpy(&submeshMetadataOffset[i], ptr + 4 + meshMetadataOffset + 20 + i * 24, sizeof(int));
-                    memcpy(&submeshVertexCount[i], ptr + 4 + meshMetadataOffset + 20 + i * 24 + submeshMetadataOffset[i] + 4, sizeof(int));
-                }
-
-                std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
-                int vertexOffset = 0;
-
-                for (int i = 0; i < submeshCount; i++)
-                {
-                    unsigned char *submeshVertexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2] + 4;
-                    unsigned int submeshVertexDataSize = myFile.RemovableBuffersInfo[i * 4] - 4;
-                    unsigned int bytesPerVertex = submeshVertexDataSize / submeshVertexCount[i];
-
-                    for (int j = 0; j < submeshVertexCount[i]; j++)
-                    {
-                        float *v = reinterpret_cast<float *>(submeshVertexDataPtr + j * bytesPerVertex);
-                        vertices.push_back(v[0]); // x
-                        vertices.push_back(v[1]); // y
-                        vertices.push_back(v[2]); // z
-
-                        vertices.push_back(v[3]); //
-                        vertices.push_back(v[4]); //
-                        vertices.push_back(v[5]); //
-
-                        vertices.push_back(v[6]); // u
-                        vertices.push_back(v[7]); // v
-                    }
-
-                    unsigned char *submeshIndexDataPtr = (unsigned char *)myFile.RemovableBuffers[i * 2 + 1] + 4;
-                    unsigned int submeshIndexDataSize = myFile.RemovableBuffersInfo[i * 4 + 2] - 4;
-                    unsigned int submeshIndexCount = submeshIndexDataSize / sizeof(unsigned short);
-
-                    unsigned short *rawIndices = reinterpret_cast<unsigned short *>(submeshIndexDataPtr);
-
-                    for (int k = 0; k < submeshIndexCount; k++)
-                        indices.push_back((unsigned int)rawIndices[k] + i * vertexOffset);
-
-                    vertexOffset += submeshVertexCount[i];
-                }
-
-                // retrieve textures
-                int textureMetadataOffset;
-                ptr = (char *)myFile.DataBuffer + 80 + 96;
-                memcpy(&textureCount, ptr, sizeof(int));
-                memcpy(&textureMetadataOffset, ptr + 4, sizeof(int));
-
-                std::cout << "TEXTURES: " << textureCount << std::endl;
-                textures.resize(textureCount);
-
-                for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
-                {
-                    std::string &s = myFile.StringStorage[i];
-
-                    for (char &c : s)
-                        c = std::tolower(static_cast<unsigned char>(c));
-
-                    if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
-                    {
-                        // build the png name
-                        std::string tex = s;
-                        tex.replace(tex.length() - 4, 4, ".png");
-
-                        // ensure it starts with "texture/"
-                        const std::string prefix = "texture/";
-                        if (tex.rfind(prefix, 0) != 0)
-                            tex = prefix + tex;
-
-                        if (std::find(textureNames.begin(),
-                                      textureNames.end(),
-                                      tex) == textureNames.end())
-                        {
-                            textureNames.push_back(tex);
-                        }
-                    }
-                }
-
-                for (int i = 0; i < (int)textureNames.size(); ++i)
-                    std::cout << textureNames[i] << std::endl;
-
-                std::string pathStr(fpath); // convert to std::string
-                size_t lastSlash = pathStr.find_last_of("/\\");
-                fileName = (lastSlash == std::string::npos)
-                               ? pathStr
-                               : pathStr.substr(lastSlash + 1);
-
-                vertexCount = vertices.size() / 8;
-                faceCount = indices.size() / 3;
-                fileSize = myFile.getSize();
+                memcpy(&submeshMetadataOffset[i], ptr + 4 + meshMetadataOffset + 20 + i * 24, sizeof(int));
+                memcpy(&submeshVertexCount[i], ptr + 4 + meshMetadataOffset + 20 + i * 24 + submeshMetadataOffset[i] + 4, sizeof(int));
+                memcpy(&subsubmeshCount[i], ptr + 4 + meshMetadataOffset + 20 + i * 24 + submeshMetadataOffset[i] + 12, sizeof(int));
             }
+
+            std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
+            int vertexOffset = 0; // helps to correctly merge submesh index data into a single unified vector
+            int temp = 0;         // [TODO] need to handle split of the index data in some of the models
+
+            // loop through each submesh, retrieve its vertex and index data, and append to the full mesh
+            for (int i = 0; i < submeshCount; i++)
+            {
+                unsigned char *submeshVertexDataPtr = (unsigned char *)myFile.RemovableBuffers[i + temp] + 4;
+                unsigned int submeshVertexDataSize = myFile.RemovableBuffersInfo[(i + temp) * 2] - 4;
+                unsigned int bytesPerVertex = submeshVertexDataSize / submeshVertexCount[i];
+
+                for (int j = 0; j < submeshVertexCount[i]; j++)
+                {
+                    float v[8]; // each vertex has 3 position, 3 normal, and 2 texture coordinates (total of 8 float components; in fact, in the .bdae file there are more than 8 variables per vertex, that's why bytesPerVertex is more than 8 * sizeof(float))
+                    memcpy(v, submeshVertexDataPtr + j * bytesPerVertex, sizeof(v));
+
+                    vertices.push_back(v[0]); // X
+                    vertices.push_back(v[1]); // Y
+                    vertices.push_back(v[2]); // Z
+
+                    vertices.push_back(v[3]); // Nx
+                    vertices.push_back(v[4]); // Ny
+                    vertices.push_back(v[5]); // Nz
+
+                    vertices.push_back(v[6]); // S
+                    vertices.push_back(v[7]); // T
+                }
+
+                unsigned char *submeshIndexDataPtr = (unsigned char *)myFile.RemovableBuffers[i + temp + 1] + 4;
+                unsigned int submeshIndexDataSize = 0;
+
+                for (int m = 0; m < subsubmeshCount[i]; m++)
+                {
+                    submeshIndexDataSize += myFile.RemovableBuffersInfo[(i + temp) * 2 + 2] - 4;
+                    temp++;
+                }
+
+                unsigned int submeshIndexCount = submeshIndexDataSize / sizeof(unsigned short);
+
+                unsigned short *rawIndices = reinterpret_cast<unsigned short *>(submeshIndexDataPtr);
+
+                for (int k = 0; k < submeshIndexCount; k++)
+                    indices.push_back((unsigned int)rawIndices[k] + i * vertexOffset);
+
+                vertexOffset += submeshVertexCount[i];
+            }
+
+            // search for texture names
+            ptr = (char *)myFile.DataBuffer + 80 + 96;
+            memcpy(&textureCount, ptr, sizeof(int));
+
+            std::cout << "TEXTURES: " << textureCount << std::endl;
+
+            // [TODO] implement a more robust approach
+            // loop through each retrieved string and find those that are texture names
+            for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
+            {
+                std::string s = myFile.StringStorage[i];
+
+                // convert to lowercase
+                for (char &c : s)
+                    c = std::tolower(c);
+
+                // a string is a texture file name if it ends with '.tga' and doesn't start with '_'
+                if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
+                {
+                    // ensure it starts with "texture/"
+                    if (s.rfind("texture/", 0) != 0)
+                        s = "texture/" + s;
+
+                    // replace the ending with '.png'
+                    s.replace(s.length() - 4, 4, ".png");
+
+                    // ensure it is a unique texture name
+                    if (std::find(textureNames.begin(), textureNames.end(), s) == textureNames.end())
+                        textureNames.push_back(s);
+                }
+            }
+
+            for (int i = 0; i < (int)textureNames.size(); i++)
+                std::cout << textureNames[i] << std::endl;
+
+            // set file info to be displayed in the settings panel
+            std::string pathStr(fpath);
+            fileName = pathStr.substr(pathStr.find_last_of("/\\") + 1); // file name is after the last path separator in the full path
+            fileSize = myFile.Size;
+            vertexCount = vertices.size() / 8;
+            faceCount = indices.size() / 3;
         }
 
-        delete bdaeFile;
-        delete archiveReader;
+        free(myFile.DataBuffer);
+        delete[] static_cast<char *>(myFile.RemovableBuffers[0]);
+        delete[] myFile.RemovableBuffers;
+        delete[] myFile.RemovableBuffersInfo;
     }
+
+    delete bdaeFile;
+    delete bdaeArchive;
 
     // 3. setup buffers
     glGenVertexArrays(1, &VAO); // generate a Vertex Attribute Object to store vertex attribute configurations
@@ -559,6 +566,7 @@ void loadBDAEModel(const char *fpath)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
     // 4. load texture(s)
+    textures.resize(textureCount);
     glGenTextures(textureCount, textures.data()); // generate and store texture ID(s)
 
     for (int i = 0; i < textureCount; i++)

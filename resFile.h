@@ -5,32 +5,36 @@
 #include "access.h"
 #include "libs/io/CPackResReader.h"
 
+// .bdae file header structure
 struct FileHeaderData
 {
-    unsigned int signature;
-    unsigned short endianCheck;
-    unsigned short version;
-    unsigned int sizeOfHeader;
-    unsigned int sizeOfFile;
-    unsigned int numOffsets;
-    unsigned int origin;
-    Access<Access<Access<int>>> offsets;
-    Access<int> stringData;
-    Access<char> data;
-    Access<char> relatedFiles;
-    Access<char> removable;
-    unsigned int sizeOfRemovableChunk;
-    unsigned int nbOfRemovableChunks;
-    unsigned int useSeparatedAllocationForRemovableBuffers;
-    unsigned int sizeOfDynamicChunk;
+    unsigned int signature;                                 // 4 bytes  file signature – 'BRES' for .bdae file
+    unsigned short endianCheck;                             // 2 bytes  byte order mark
+    unsigned short version;                                 // 2 bytes  version (?)
+    unsigned int sizeOfHeader;                              // 4 bytes  header size in bytes
+    unsigned int sizeOfFile;                                // 4 bytes  file size in bytes
+    unsigned int numOffsets;                                // 4 bytes  number of entries in the offset table
+    unsigned int origin;                                    // 4 bytes  file origin – always '0' for standalone .bdae files (?)
+    Access<Access<Access<int>>> offsets;                    // 4 bytes  offset to Offset Data section (in bytes, from the beginning of the file) – should be 80
+    Access<int> stringData;                                 // 4 bytes  offset to String Data section
+    Access<char> data;                                      // 4 bytes  offset to Data section
+    Access<char> relatedFiles;                              // 4 bytes  offset to related file names (?)
+    Access<char> removable;                                 // 4 bytes  offset to Removable section
+    unsigned int sizeOfRemovableChunk;                      // 4 bytes  size of Removable section in bytes
+    unsigned int nbOfRemovableChunks;                       // 4 bytes  number of removable chunks
+    unsigned int useSeparatedAllocationForRemovableBuffers; // 4 bytes  1: each removable chunk is loaded into its own separately allocated buffer, 0: all chunks in one shared buffer
+    unsigned int sizeOfDynamicChunk;                        // 4 bytes  size of dynamic chunk (?)
 };
 
 /*
     We end up with a fully–populated File object whose entire .bdae payload is in memory (header + offset table + string table + data + removable chunks), with every offset “fix‑up” to real C++ pointers and all embedded strings pulled out into shared‐string instances.
 */
 
+// [TODO] annotate
 struct File : public Access<FileHeaderData>
 {
+    std::vector<std::string> StringStorage;
+
     int Size;
     int SizeUnRemovable;
     int SizeOffsetStringTables;
@@ -40,7 +44,6 @@ struct File : public Access<FileHeaderData>
     int NbRemovableBuffers;
     bool UseSeparatedAllocationForRemovableBuffers;
     int SizeDynamic;
-    std::vector<std::string> StringStorage;
 
     // bad: these static variables prevent multi-threaded loading..
     static char *ExternalFilePtr[2];
@@ -50,42 +53,29 @@ struct File : public Access<FileHeaderData>
     static bool ExtractStringTable;
 
     bool IsValid;
-    void *DataBuffer;
     void *OffsetTable;
     void *StringTable;
+    void *DataBuffer;
 
     File() : IsValid(false), OffsetTable(NULL) {}
 
     File(void *ptr, unsigned long *removableBuffersInfo = 0, void **removableBuffers = 0, bool useSeparatedAllocationForRemovableBuffers = false, void *offsetTable = NULL, void *stringTable = NULL)
-        : Access<FileHeaderData>(ptr), DataBuffer(ptr), IsValid(false), OffsetTable(offsetTable), StringTable(stringTable), RemovableBuffersInfo(removableBuffersInfo), RemovableBuffers(removableBuffers), UseSeparatedAllocationForRemovableBuffers(useSeparatedAllocationForRemovableBuffers)
+        : Access<FileHeaderData>(ptr),
+          DataBuffer(ptr),
+          IsValid(false),
+          OffsetTable(offsetTable),
+          StringTable(stringTable),
+          RemovableBuffersInfo(removableBuffersInfo),
+          RemovableBuffers(removableBuffers),
+          UseSeparatedAllocationForRemovableBuffers(useSeparatedAllocationForRemovableBuffers)
     {
         if (ptr)
             IsValid = (Init() == 0);
     }
 
-    int Init(IReadResFile *file);
-
     int Init();
 
-    int Init(void *ptr)
-    {
-        *this = File(ptr, NULL);
-        return IsValid != 1;
-    }
-
-    int getSize() const { return Size; }
-
-    int getMemoryUsage() const
-    {
-        int size = Size - SizeDynamic - SizeOffsetStringTables;
-        if (RemovableBuffers == NULL)
-            size -= SizeRemovableBuffer;
-        return size;
-    }
-
-    bool isValid() const { return IsValid; }
-
-    bool hasDynamicContent() const { return SizeDynamic != 0; }
+    int Init(IReadResFile *file);
 };
 
 #endif
