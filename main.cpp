@@ -483,55 +483,53 @@ void loadBDAEModel(const char *fpath)
                     vertexOffset += submeshVertexCount[i];
                 }
 
-                // retrieve textures
-                int textureMetadataOffset;
+                // search for texture names
                 ptr = (char *)myFile.DataBuffer + 80 + 96;
                 memcpy(&textureCount, ptr, sizeof(int));
-                memcpy(&textureMetadataOffset, ptr + 4, sizeof(int));
 
                 std::cout << "TEXTURES: " << textureCount << std::endl;
-                textures.resize(textureCount);
 
+                // [TODO] implement a more robust approach
+                // iterate over each retrieved string and find those that are texture names
                 for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
                 {
-                    std::string &s = myFile.StringStorage[i];
+                    std::string s = myFile.StringStorage[i];
 
-                    for (char &c : s)
-                        c = std::tolower(static_cast<unsigned char>(c));
-
+                    // a string is a texture file name if it ends with '.tga' and doesn't start with '_'
                     if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
                     {
-                        // build the png name
-                        std::string tex = s;
-                        tex.replace(tex.length() - 4, 4, ".png");
+                        // ensure it is lowercase
+                        for (char &c : s)
+                            c = std::tolower(c);
 
                         // ensure it starts with "texture/"
-                        const std::string prefix = "texture/";
-                        if (tex.rfind(prefix, 0) != 0)
-                            tex = prefix + tex;
+                        if (s.rfind("texture/", 0) != 0)
+                            s = "texture/" + s;
 
-                        if (std::find(textureNames.begin(),
-                                      textureNames.end(),
-                                      tex) == textureNames.end())
-                        {
-                            textureNames.push_back(tex);
-                        }
+                        // replace the ending with '.png'
+                        s.replace(s.length() - 4, 4, ".png");
+
+                        // ensure it is a unique texture name
+                        if (std::find(textureNames.begin(), textureNames.end(), s) == textureNames.end())
+                            textureNames.push_back(s);
                     }
                 }
 
-                for (int i = 0; i < (int)textureNames.size(); ++i)
+                for (int i = 0; i < (int)textureNames.size(); i++)
                     std::cout << textureNames[i] << std::endl;
 
-                std::string pathStr(fpath); // convert to std::string
-                size_t lastSlash = pathStr.find_last_of("/\\");
-                fileName = (lastSlash == std::string::npos)
-                               ? pathStr
-                               : pathStr.substr(lastSlash + 1);
-
+                // set file info to be displayed in the settings panel
+                std::string pathStr(fpath);
+                fileName = pathStr.substr(pathStr.find_last_of("/\\") + 1); // file name is after the last path separator in the full path
+                fileSize = myFile.getSize();
                 vertexCount = vertices.size() / 8;
                 faceCount = indices.size() / 3;
-                fileSize = myFile.getSize();
             }
+
+            free(myFile.DataBuffer);
+            delete[] static_cast<char *>(myFile.RemovableBuffers[0]);
+            delete[] myFile.RemovableBuffers;
+            delete[] myFile.RemovableBuffersInfo;
         }
 
         delete bdaeFile;
@@ -559,6 +557,7 @@ void loadBDAEModel(const char *fpath)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
 
     // 4. load texture(s)
+    textures.resize(textureCount);
     glGenTextures(textureCount, textures.data()); // generate and store texture ID(s)
 
     for (int i = 0; i < textureCount; i++)
