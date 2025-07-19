@@ -257,16 +257,16 @@ SOFTWARE.
 #define tableHeaderFileDateString "Date"
 #endif  // tableHeaderFileDateString
 #ifndef fileSizeBytes
-#define fileSizeBytes "o"
+#define fileSizeBytes "B"
 #endif  // fileSizeBytes
 #ifndef fileSizeKiloBytes
-#define fileSizeKiloBytes "Ko"
+#define fileSizeKiloBytes "KB"
 #endif  // fileSizeKiloBytes
 #ifndef fileSizeMegaBytes
-#define fileSizeMegaBytes "Mo"
+#define fileSizeMegaBytes "MB"
 #endif  // fileSizeMegaBytes
 #ifndef fileSizeGigaBytes
-#define fileSizeGigaBytes "Go"
+#define fileSizeGigaBytes "GB"
 #endif  // fileSizeGigaBytes
 #ifndef OverWriteDialogTitleString
 #define OverWriteDialogTitleString "The selected file already exists!"

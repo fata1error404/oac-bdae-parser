@@ -26,7 +26,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow *window, double xpos, double ypos);
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void processInput(GLFWwindow *window);
-void loadBDAEModel(const char *fname);
+void loadBDAEModel(const char *fpath);
 
 // window settings
 bool isFullscreen = false;
@@ -48,14 +48,13 @@ bool firstMouse = true;                 // flag to check if the mouse movement i
 float lastX = DEFAULT_SCR_WIDTH / 2.0;  // starting cursor position (x-axis)
 float lastY = DEFAULT_SCR_HEIGHT / 2.0; // starting cursor position (y-axis)
 
-bool displayBaseMesh = false;
+// viewer variables
+bool displayBaseMesh = false; // flag that indicates base / textured mesh display mode
+bool modelLoaded = false;     // flag that indicates whether to display model info and settings
 
-bool modelLoaded = false;
-std::string currentFile;
 std::string fileName;
-int fileSize = 0;
-int verticesNumber = 0, facesNumber = 0, textureCount;
-unsigned int VAO = 0, VBO = 0, EBO = 0;
+int fileSize, vertexCount, faceCount, textureCount;
+unsigned int VAO, VBO, EBO;
 std::vector<float> vertices;
 std::vector<unsigned int> indices;
 std::vector<unsigned int> textures;
@@ -71,6 +70,16 @@ int main()
     // GLFW window creation
     GLFWwindow *window = glfwCreateWindow(DEFAULT_SCR_WIDTH, DEFAULT_SCR_HEIGHT, "BDAE 3D Model Viewer", NULL, NULL);
 
+    // set window icon
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load("aux_docs/icon.png", &width, &height, &nrChannels, 0);
+    GLFWimage icon;
+    icon.width = width;
+    icon.height = height;
+    icon.pixels = data;
+    glfwSetWindowIcon(window, 1, &icon);
+    stbi_image_free(data);
+
     // set OpenGL context and callback
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -81,48 +90,38 @@ int main()
     // load all OpenGL function pointers
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
-    // load the app icon
-    int width, height, channels;
-    unsigned char *pixels = stbi_load("aux_docs/icon.png", &width, &height, &channels, 4);
-
-    if (pixels)
-    {
-        GLFWimage images[1];
-        images[0].width = width;
-        images[0].height = height;
-        images[0].pixels = pixels;
-
-        glfwSetWindowIcon(window, 1, images);
-        stbi_image_free(pixels);
-    }
-    else
-        std::cerr << "Failed to load icon image.\n";
-
-    //
+    // setup settings panel (Dear ImGui library)
     ImGui::CreateContext();
     ImGui_ImplOpenGL3_Init("#version 330");
     ImGui_ImplGlfw_InitForOpenGL(window, true);
 
-    ImGui::GetIO().IniFilename = NULL; // don't save UI states
+    ImGui::GetIO().IniFilename = NULL; // disable saving UI states to .ini file
 
-    // 1) Grab the style
+    // apply styles to have a grayscale theme
     ImGuiStyle &style = ImGui::GetStyle();
+    style.WindowRounding = 4.0f;                                               // border radius
+    style.WindowBorderSize = 0.0f;                                             // border width
+    style.Colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);              // text color
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);      // background color of the panel's main content area
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f); // background color of the panel's title bar
+    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);  // .. (when panel is hidden)
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);       // .. (when panel is overlayed and inactive)
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);           // background color of input fields, checkboxes
+    style.Colors[ImGuiCol_Button] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);            // background color of buttons
+    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);         // mark color in checkboxes
+    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f); // background color of table headers (for file browsing dialog)
 
-    // 2) Pick your colors (RGBA, each component 0.0f…1.0f)
-    //    Here’s an example dark gray background + slightly lighter title bar:
-    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);  // when hide settings
-    style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.65f, 0.65f, 0.65f, 1.00f); // background of "File Name" / "Type"
-    style.Colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
-    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-    style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-    style.Colors[ImGuiCol_Button] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-
-    // 3) (Optional) Tweak rounding, borders, etc.
-    style.WindowRounding = 4.0f; // rounding of window corners
-    style.WindowBorderSize = 0.0f;
+    // configure file browsing dialog
+    IGFD::FileDialogConfig cfg;
+    cfg.path = "./model/creature/pet";                                                     // default path
+    cfg.fileName = "";                                                                     // default file name (none)
+    cfg.filePathName = "";                                                                 // default file path name (none)
+    cfg.countSelectionMax = 1;                                                             // only allow to select one file
+    cfg.flags = ImGuiFileDialogFlags_HideColumnType | ImGuiFileDialogFlags_HideColumnDate; // flags: hide file type and date columns
+    cfg.userFileAttributes = NULL;                                                         // no custom columns
+    cfg.userDatas = NULL;                                                                  // no custom user data passed to the dialog
+    cfg.sidePane = NULL;                                                                   // no side panel
+    cfg.sidePaneWidth = 0.0f;                                                              // side panel width (unused)
 
     // enable depth testing to ensure correct pixel rendering order in 3D space (depth buffer prevents incorrect overlaying and redrawing of objects)
     glEnable(GL_DEPTH_TEST);
@@ -149,78 +148,54 @@ int main()
         // handle keyboard input
         processInput(window);
 
+        // prepare ImGui for a new frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // In your render‐loop ImGui block:sd
-        ImGui::SetNextWindowSize(ImVec2(200.0f, 200.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Always);
-        ImGui::Begin("Settings", NULL,
-                     ImGuiWindowFlags_NoResize |
-                         ImGuiWindowFlags_AlwaysAutoResize |
-                         ImGuiWindowFlags_NoMove);
+        // define settings panel with fixed size and position
+        ImGui::SetNextWindowSize(ImVec2(200.0f, 200.0f), ImGuiCond_None);
+        ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_None);
+        ImGui::Begin("Settings", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
-        // 1) “Load Model” button always visible
+        // add a button that opens file browsing dialog
         if (ImGui::Button("Load Model"))
         {
-            IGFD::FileDialogConfig cfg;
-            cfg.path = "./model/creature/pet"; // start in current directory
-            cfg.fileName = "";                 // no default filename
-            cfg.filePathName = "";             // ignore pre–set full path
-            cfg.countSelectionMax = 1;         // only allow one file
-            cfg.userDatas = nullptr;           // no user data
-            cfg.flags = ImGuiFileDialogFlags_None;
-            cfg.sidePane = nullptr;           // no extra pane
-            cfg.sidePaneWidth = 250.0f;       // (unused)
-            cfg.userFileAttributes = nullptr; // default file attributes
-
             IGFD::FileDialog::Instance()->OpenDialog(
-                "BDAE_OpenDlg",     // Dialog key
-                "Load .bdae Model", // Window title
-                ".bdae",            // Filters
-                cfg                 // FileDialogConfig
+                "File_Browsing_Dialog", // dialog ID (used to reference this dialog instance)
+                "Load .bdae Model",     // dialog title
+                ".bdae",                // file extension filter
+                cfg                     // config
             );
         }
 
-        ImVec2 dialogSize(600.0f, 400.0f); // fixed dialog size
-        ImVec2 centerPos(
-            (currentScreenWidth - dialogSize.x) * 0.5f,
-            (currentScreenHeight - dialogSize.y) * 0.5f);
-
+        // define file browsing dialog with fixed size and position in the center
+        ImVec2 dialogSize(600.0f, 400.0f);
+        ImVec2 dialogPos((currentScreenWidth - dialogSize.x) * 0.5f, (currentScreenHeight - dialogSize.y) * 0.5f);
         ImGui::SetNextWindowSize(dialogSize, ImGuiCond_Always);
-        ImGui::SetNextWindowPos(centerPos, ImGuiCond_Always);
+        ImGui::SetNextWindowPos(dialogPos, ImGuiCond_Always);
 
-        // Render & handle the dialog every frame
-        if (IGFD::FileDialog::Instance()->Display("BDAE_OpenDlg", ImGuiWindowFlags_NoResize))
+        // if the dialog is open
+        if (IGFD::FileDialog::Instance()->Display("File_Browsing_Dialog", ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
         {
-            // User clicked “OK” or double‑clicked
+            // if selection is confirmed (by OK or double-click), process it
             if (IGFD::FileDialog::Instance()->IsOk())
             {
-                // GetSelection() returns a map<filename, fullpath>
-                auto selection = IGFD::FileDialog::Instance()->GetSelection();
-                if (!selection.empty())
-                {
-                    // Since max=1, just grab the first entry
-                    currentFile = selection.begin()->second;
-                    loadBDAEModel(currentFile.c_str());
-                    size_t lastSlash = currentFile.find_last_of("/\\");
-                    fileName = (lastSlash == std::string::npos) ? currentFile : currentFile.substr(lastSlash + 1);
-                }
+                std::map<std::string, std::string> selection = IGFD::FileDialog::Instance()->GetSelection(); // returns pairs (file name, full path)
+                loadBDAEModel(selection.begin()->second.c_str());
             }
-            // Close the dialog to reset its state
-            modelLoaded = true;
-            IGFD::FileDialog::Instance()->Close();
+
+            IGFD::FileDialog::Instance()->Close(); // close the dialog after handling OK or Cancel
         }
 
-        // 2) If a model is loaded, show its stats + toggles
+        // if a model is loaded, show its stats + checkboxes
         if (modelLoaded)
         {
             ImGui::Spacing();
             ImGui::Text("File: %s", fileName.c_str());
             ImGui::Text("Size: %d Bytes", fileSize);
-            ImGui::Text("Vertices: %d", verticesNumber);
-            ImGui::Text("Faces: %d", facesNumber);
+            ImGui::Text("Vertices: %d", vertexCount);
+            ImGui::Text("Faces: %d", faceCount);
             ImGui::NewLine();
             ImGui::Checkbox("Base Mesh On/Off", &displayBaseMesh);
             ImGui::Checkbox("Lighting On/Off", &showLighting);
@@ -231,6 +206,7 @@ int main()
         glClearColor(0.85f, 0.85f, 0.85f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the color buffer (fill the screen with a clear color) and the depth buffer; otherwise the information of the previous frame stays in these buffers
 
+        // update dynamic shader uniforms on GPU
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = ourCamera.GetViewMatrix();
         glm::mat4 projection = glm::perspective(glm::radians(ourCamera.Zoom), (float)currentScreenWidth / (float)currentScreenHeight, 0.1f, 1000.0f);
@@ -242,20 +218,25 @@ int main()
         ourShader.setBool("lighting", showLighting);
         ourShader.setVec3("cameraPos", ourCamera.Position);
 
+        // render model
         glBindVertexArray(VAO);
 
         if (!displayBaseMesh)
         {
-            ourShader.setInt("renderMode", 1);
-            ourShader.setInt("textureCount", (int)textures.size());
+            /*
+            [TODO] multiple texture models doesn't blend them correctly
 
-            for (int i = 0; i < (int)textures.size(); ++i)
+            ourShader.setInt("textureCount", textureCount);
+
+            for (int i = 0; i < textureCount; i++)
             {
                 glActiveTexture(GL_TEXTURE0 + i);                   // activate texture unit i
                 glBindTexture(GL_TEXTURE_2D, textures[i]);          // bind texture
                 ourShader.setInt("texture" + std::to_string(i), i); // assign texture unit to sampler
             }
+            */
 
+            ourShader.setInt("renderMode", 1);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
         }
@@ -273,6 +254,7 @@ int main()
         // render light cube
         lightSource.draw(view, projection);
 
+        // render settings panel (and file browsing dialog, if open)
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -301,7 +283,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 // whenever the mouse moves, this callback function executes
 void mouse_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    // EXPLAIN
+    // [TODO] EXPLAIN
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) != GLFW_PRESS)
         firstMouse = true;
 
@@ -397,47 +379,43 @@ void processInput(GLFWwindow *window)
     ourCamera.UpdatePosition(deltaTime);
 }
 
-// Encapsulate your entire BDAE + OpenGL setup here:
 // BDAE File Loading
 // _________________
 
-void loadBDAEModel(const char *fname)
+void loadBDAEModel(const char *fpath)
 {
-    // 1. clear old GPU buffers if any
+    // 1. clear GPU memory and reset viewer state
     if (VAO)
     {
         glDeleteVertexArrays(1, &VAO);
         VAO = 0;
     }
+
     if (VBO)
     {
         glDeleteBuffers(1, &VBO);
         VBO = 0;
     }
+
     if (EBO)
     {
         glDeleteBuffers(1, &EBO);
         EBO = 0;
     }
+
     if (!textures.empty())
     {
-        std::cout << "CLEANING" << std::endl;
-        glDeleteTextures((GLsizei)textures.size(), textures.data());
+        glDeleteTextures(textureCount, textures.data());
         textures.clear();
     }
 
-    std::vector<std::string> textureNames;
     vertices.clear();
     indices.clear();
-    verticesNumber = facesNumber = fileSize = textureCount = 0;
+    fileSize = vertexCount = faceCount = textureCount = 0;
+    std::vector<std::string> textureNames;
 
-    // 2. load the .bdae exactly like you already do...f
-    //    Fill `vertices` & `indices` vectors, compute verticesNumber, facesNumber, fileSize
-    //    (You can copy–paste your existing block here.)
-
-    IReadResFile *archiveFile = createReadFile(fname);
-
-    int vertexOffset = 0;
+    // 2. load and parse the .bdae file, building the mesh vertex and index data
+    IReadResFile *archiveFile = createReadFile(fpath);
 
     if (archiveFile)
     {
@@ -470,6 +448,7 @@ void loadBDAEModel(const char *fname)
                 }
 
                 std::cout << "\nRetrieving model vertices, combining " << submeshCount << " submeshes.." << std::endl;
+                int vertexOffset = 0;
 
                 for (int i = 0; i < submeshCount; i++)
                 {
@@ -543,8 +522,14 @@ void loadBDAEModel(const char *fname)
                 for (int i = 0; i < (int)textureNames.size(); ++i)
                     std::cout << textureNames[i] << std::endl;
 
-                verticesNumber = vertices.size() / 8;
-                facesNumber = indices.size() / 3;
+                std::string pathStr(fpath); // convert to std::string
+                size_t lastSlash = pathStr.find_last_of("/\\");
+                fileName = (lastSlash == std::string::npos)
+                               ? pathStr
+                               : pathStr.substr(lastSlash + 1);
+
+                vertexCount = vertices.size() / 8;
+                faceCount = indices.size() / 3;
                 fileSize = myFile.getSize();
             }
         }
@@ -602,4 +587,6 @@ void loadBDAEModel(const char *fname)
         glGenerateMipmap(GL_TEXTURE_2D);
         stbi_image_free(data);
     }
+
+    modelLoaded = true;
 }
