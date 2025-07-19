@@ -1,9 +1,6 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include <glad/glad.h>
-#include <glm/gtc/matrix_transform.hpp>
-
 // define movement directions as named constants to abstract from window-system specific input handling
 enum Camera_Movement
 {

@@ -1,10 +1,8 @@
 #ifndef SHADER_H // if SHADER_H is not defined, include the code below
 #define SHADER_H // define a macro SHADER_H (to mark that this header file has been included)
 
-#include <glad/glad.h>
-#include <glm/gtc/type_ptr.hpp> // for matrix conversion to raw pointers (OpenGL compatibility with GLM)
-#include <fstream>              // for reading files
-#include <sstream>              // for handling string streams
+#include <fstream> // for reading files
+#include <sstream> // for handling string streams
 
 class Shader
 {

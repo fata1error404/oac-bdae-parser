@@ -1,7 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
-#include <glad/glad.h>                  // library for loading OpenGL functions (like glClear or glViewport)
+#include "libs/glad/glad.h"             // library for loading OpenGL functions (like glClear or glViewport)
 #include <GLFW/glfw3.h>                 // library for creating windows and handling input – mouse clicks, keyboard input, or window resizes
 #include <glm/glm.hpp>                  // for basic vector and matrix mathematics functions
 #include <glm/gtc/matrix_transform.hpp> // for matrix transformation functions
@@ -80,6 +80,23 @@ int main()
 
     // load all OpenGL function pointers
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+
+    // load the app icon
+    int width, height, channels;
+    unsigned char *pixels = stbi_load("aux_docs/icon.png", &width, &height, &channels, 4);
+
+    if (pixels)
+    {
+        GLFWimage images[1];
+        images[0].width = width;
+        images[0].height = height;
+        images[0].pixels = pixels;
+
+        glfwSetWindowIcon(window, 1, images);
+        stbi_image_free(pixels);
+    }
+    else
+        std::cerr << "Failed to load icon image.\n";
 
     //
     ImGui::CreateContext();
@@ -386,9 +403,7 @@ void processInput(GLFWwindow *window)
 
 void loadBDAEModel(const char *fname)
 {
-    currentFile = fname;
-
-    // 1) Clear old GPU buffers if any
+    // 1. clear old GPU buffers if any
     if (VAO)
     {
         glDeleteVertexArrays(1, &VAO);
@@ -416,7 +431,7 @@ void loadBDAEModel(const char *fname)
     indices.clear();
     verticesNumber = facesNumber = fileSize = textureCount = 0;
 
-    // 2) Load the .bdae exactly like you already do...f
+    // 2. load the .bdae exactly like you already do...f
     //    Fill `vertices` & `indices` vectors, compute verticesNumber, facesNumber, fileSize
     //    (You can copy–paste your existing block here.)
 
@@ -502,6 +517,9 @@ void loadBDAEModel(const char *fname)
                 {
                     std::string &s = myFile.StringStorage[i];
 
+                    for (char &c : s)
+                        c = std::tolower(static_cast<unsigned char>(c));
+
                     if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
                     {
                         // build the png name
@@ -512,9 +530,6 @@ void loadBDAEModel(const char *fname)
                         const std::string prefix = "texture/";
                         if (tex.rfind(prefix, 0) != 0)
                             tex = prefix + tex;
-
-                        // append to our list
-                        // textureNames.push_back(tex);
 
                         if (std::find(textureNames.begin(),
                                       textureNames.end(),

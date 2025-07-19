@@ -1,18 +1,16 @@
 TARGET = app
-COMPILER_TOOLS = -B/usr/lib/x86_64-linux-gnu
 
-IMGUI_SOURCES = libs/imgui/imgui.cpp \
-            	libs/imgui/imgui_draw.cpp \
-            	libs/imgui/imgui_tables.cpp \
-            	libs/imgui/imgui_widgets.cpp \
-            	libs/imgui/imgui_impl_glfw.cpp \
-            	libs/imgui/imgui_impl_opengl3.cpp \
-				libs/imgui/ImGuiFileDialog.cpp
+LIB_SOURCES = libs/glad/glad.c \
+			  libs/imgui/imgui.cpp \
+              libs/imgui/imgui_draw.cpp \
+              libs/imgui/imgui_tables.cpp \
+              libs/imgui/imgui_widgets.cpp \
+              libs/imgui/imgui_impl_glfw.cpp \
+              libs/imgui/imgui_impl_opengl3.cpp \
+			  libs/imgui/ImGuiFileDialog.cpp
 
-IMGUI_HEADERS = -Ilibs/imgui
-
-app: main.cpp resFile.cpp $(IMGUI_SOURCES)
-	g++ $(CXXFLAGS) main.cpp resFile.cpp $(IMGUI_SOURCES) -o $(TARGET) $(COMPILER_TOOLS) $(INCLUDES) libs/io/libio.a -lglfw -lglad
+app: main.cpp resFile.cpp $(LIB_SOURCES)
+	g++ main.cpp resFile.cpp $(LIB_SOURCES) -o $(TARGET) libs/io/libio.a -lglfw
 
 clean:
 	rm -f $(TARGET)

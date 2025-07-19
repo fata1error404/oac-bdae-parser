@@ -56,6 +56,7 @@ The .bdae viewer consists of:
 - `camera.h` – implementation of the camera system. OpenGL by itself is not familiar with the concept of a camera, so we simulate it using Euler angles.
 - `light.h` – light settings for the Phong lighting model and definition of the light source (a light cube is displayed for reference).
 - `libs/stb_image.h` – single-header library for loading texture images.
+- `libs/glad` – library for loading OpenGL functions.
 - `libs/imgui` – Dear ImGui library for file browsing and settings UI.
 
 These files, except for the last 2 libraries, were written from scratch. Currently, the functionality includes loading a selected .bdae model, displaying a mesh with a texture applied, and allowing the user to fly around it.
@@ -81,9 +82,9 @@ OS: __Linux Mint 21.2__
 Download the models archive from my [Google Drive](https://drive.google.com/drive/folders/19uDs_jDS1yYuNcj61CEjhljezErinMBC?usp=drive_link), and place the two contained folders in the project's root directory. The `model` folder contains .bdae files, and the `texture` folder contains .png texture images.
 
 Install dependencies  
-`sudo apt-get install mesa-utils mesa-common-dev libglu1-mesa-dev freeglut3-dev`
- –  core OpenGL utilities (libraries for rendering, handling windowing and output)  
-`sudo apt-get install libglew-dev libglfw3-dev libglm-dev` – advanced development libraries (GLEW, GLFW, GLM)
+`sudo apt-get install mesa-common-dev`
+ –  core OpenGL utilities development headers  
+`sudo apt-get install libglfw3-dev libglm-dev` – necessary development libraries (GLFW for handling windowing and input, GLM for OpenGL-style mathematics)
 
 Compile and launch  
 `make`  
