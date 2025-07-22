@@ -107,7 +107,7 @@ int File::Init(IReadResFile *file)
     int sizeStringTable;
     int sizeDynamicContent;
 
-    sizeOffsetTable = header->numOffsets * sizeof(unsigned long);
+    sizeOffsetTable = header->numOffsets * sizeof(uint64_t);
     sizeStringTable = (ExtractStringTable ? header->data.m_offset - header->stringData.m_offset : 0);
     SizeRemovableBuffer = header->sizeOfRemovableChunk;
     sizeDynamicContent = header->sizeOfDynamicChunk;
@@ -141,8 +141,8 @@ int File::Init(IReadResFile *file)
     {
         // read size / offset pairs for each removable chunk
         std::cout << "\n[Init] At position " << file->getPos() << ", reading removable section info.." << std::endl;
-        RemovableBuffersInfo = new unsigned long[NbRemovableBuffers * 2];
-        file->read(RemovableBuffersInfo, NbRemovableBuffers * 2 * sizeof(unsigned long));
+        RemovableBuffersInfo = new uint64_t[NbRemovableBuffers * 2];
+        file->read(RemovableBuffersInfo, NbRemovableBuffers * 2 * sizeof(uint64_t));
 
         std::cout << "\n_____________________\n"
                   << std::endl;
@@ -166,7 +166,7 @@ int File::Init(IReadResFile *file)
             // separated allocation mode: read each chunk into its own buffer
             for (int i = 0; i < NbRemovableBuffers; ++i)
             {
-                unsigned long bufSize = RemovableBuffersInfo[i * 2];
+                uint64_t bufSize = RemovableBuffersInfo[i * 2];
                 RemovableBuffers[i] = new char[bufSize];
                 file->read(RemovableBuffers[i], bufSize);
             }
@@ -179,16 +179,16 @@ int File::Init(IReadResFile *file)
                 RemovableBuffers[0]             → pointer to the entire data block
                 RemovableBuffers[i] (for i > 0) → pointer into that block at the start of chunk i
             */
-            unsigned long totalDataSize = SizeRemovableBuffer - (NbRemovableBuffers * 2 * sizeof(unsigned long));
+            uint64_t totalDataSize = SizeRemovableBuffer - (NbRemovableBuffers * 2 * sizeof(uint64_t));
             RemovableBuffers[0] = new char[totalDataSize];
             file->read(RemovableBuffers[0], totalDataSize);
 
-            unsigned long baseOffset = RemovableBuffersInfo[1];
+            uint64_t baseOffset = RemovableBuffersInfo[1];
 
             // assign pointers
             for (int i = 1; i < NbRemovableBuffers; ++i)
             {
-                unsigned long chunkOffset = RemovableBuffersInfo[i * 2 + 1];
+                uint64_t chunkOffset = RemovableBuffersInfo[i * 2 + 1];
                 RemovableBuffers[i] = (char *)RemovableBuffers[0] + (chunkOffset - baseOffset);
             }
         }
@@ -237,7 +237,7 @@ int File::Init()
     SizeOffsetStringTables = 0;
 
     if (OffsetTable)
-        SizeOffsetStringTables += header->numOffsets * sizeof(unsigned long);
+        SizeOffsetStringTables += header->numOffsets * sizeof(uint64_t);
     if (StringTable && ExtractStringTable)
         SizeOffsetStringTables += header->data.m_offset - header->stringData.m_offset;
 
@@ -279,7 +279,7 @@ int File::Init()
             (&header->offsets)[0] = OffsetTable; // override the address of the offset table in the Header struct to point to the temp buffer for offset table (this allows to perform all pointer fix-ups against our own copy and safely free or reallocate it without touching the original memory block mapped from the .bdae file)
 
             // sizes and pointers of the offset / string tables
-            int sizeOffsetTable = header->numOffsets * sizeof(unsigned long);
+            int sizeOffsetTable = header->numOffsets * sizeof(uint64_t);
             int sizeStringTable = (ExtractStringTable ? header->data.m_offset - header->stringData.m_offset : 0);
             unsigned int offsetTableEnd = sizeOffsetTable + SizeOfHeader;
             unsigned int stringTableEnd = ExtractStringTable ? offsetTableEnd + sizeStringTable : offsetTableEnd;

@@ -5,8 +5,8 @@
 bool showLighting = false;
 const glm::vec3 lightPos(-20.0f, 0.0f, 0.0f); // world-space position of the light source
 const glm::vec3 lightColor(1.0f);             // white color
-const float ambientStrength = 0.4f;
-const float diffuseStrength = 1.0f;
+const float ambientStrength = 0.5f;
+const float diffuseStrength = 0.6f;
 const float specularStrength = 0.5f;
 
 class Light

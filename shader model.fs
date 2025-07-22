@@ -28,7 +28,7 @@ void main()
         {
             vec3 N = normalize(Normal);
             vec3 L = normalize(lightPos - PosWorldSpace); // light direction vector
-            float diff = max(dot(-N, L), 0.0);             // measure how aligned the surface is with the light (cos = 1 means the light hits water surface directly)
+            float diff = max(dot(N, L), 0.0);             // measure how aligned the surface is with the light (cos = 1 means the light hits water surface directly)
 
             vec3 I = normalize(cameraPos - PosWorldSpace); // view direction vector
             vec3 R = reflect(-L, N);                       // reflection vector

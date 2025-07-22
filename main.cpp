@@ -50,12 +50,13 @@ float lastX = DEFAULT_SCR_WIDTH / 2.0;  // starting cursor position (x-axis)
 float lastY = DEFAULT_SCR_HEIGHT / 2.0; // starting cursor position (y-axis)
 
 // viewer variables
-bool displayBaseMesh = false; // flag that indicates base / textured mesh display mode
-bool modelLoaded = false;     // flag that indicates whether to display model info and settings
-bool fileDialogOpen = false;  // flag that indicates whether to block background inputs
+bool displayBaseMesh = false;      // flag that indicates base / textured mesh display mode
+bool modelLoaded = false;          // flag that indicates whether to display model info and settings
+bool fileDialogOpen = false;       // flag that indicates whether to block all background inputs (when the file browsing dialog is open)
+bool settingsPanelHovered = false; // flag that indicated whether to block background mouse input (when interacting with the settings panel)
 
 std::string fileName;
-int fileSize, vertexCount, faceCount, textureCount, totalSubmeshCount;
+int fileSize, vertexCount, faceCount, textureCount, alternativeTextureCount, selectedTexture, totalSubmeshCount;
 unsigned int VAO, VBO;
 std::vector<unsigned int> EBOs;
 std::vector<float> vertices;
@@ -75,7 +76,7 @@ int main()
 
     // set window icon
     int width, height, nrChannels;
-    unsigned char *data = stbi_load("aux_docs/icon.png", &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load("app icon.png", &width, &height, &nrChannels, 0);
     GLFWimage icon;
     icon.width = width;
     icon.height = height;
@@ -112,9 +113,10 @@ int main()
     style.Colors[ImGuiCol_FrameBg] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);          // background color of input fields, checkboxes
     style.Colors[ImGuiCol_Button] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);           // background color of buttons
     style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);        // mark color in checkboxes
+    style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);       // background color of sliders
     style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.65f, 0.65f, 0.65f, 1.0f); // background color of table headers (for file browsing dialog)
-    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);   // background color of scrollbar track (for file browsing dialog)
-    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.65f, 0.65f, 0.65f, 1.0f); // background color of scrollbar thumb (for file browsing dialog)
+    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);   // background color of scrollbar tracks (for file browsing dialog)
+    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.65f, 0.65f, 0.65f, 1.0f); // background color of scrollbar thumbs (for file browsing dialog)
     style.Colors[ImGuiCol_PopupBg] = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);       // background color of tooltips (for file browsing dialog)
 
     // configure file browsing dialog
@@ -161,8 +163,11 @@ int main()
         ImGui::NewFrame();
 
         // define settings panel with fixed size and position
-        ImGui::SetNextWindowSize(ImVec2(200.0f, 210.0f), ImGuiCond_None);
+        ImGui::SetNextWindowSize(ImVec2(200.0f, 270.0f), ImGuiCond_None);
         ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_None);
+
+        settingsPanelHovered = ImGui::GetIO().WantCaptureMouse;
+
         ImGui::Begin("Settings", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 
         // add a button that opens file browsing dialog
@@ -177,7 +182,7 @@ int main()
         }
 
         // define file browsing dialog with fixed size and position in the center
-        ImVec2 dialogSize(600.0f, 400.0f);
+        ImVec2 dialogSize(currentScreenWidth * 0.7f, currentScreenHeight * 0.6f);
         ImVec2 dialogPos((currentScreenWidth - dialogSize.x) * 0.5f, (currentScreenHeight - dialogSize.y) * 0.5f);
         ImGui::SetNextWindowSize(dialogSize, ImGuiCond_Always);
         ImGui::SetNextWindowPos(dialogPos, ImGuiCond_Always);
@@ -207,7 +212,14 @@ int main()
             ImGui::Text("Faces: %d", faceCount);
             ImGui::NewLine();
             ImGui::Checkbox("Base Mesh On/Off", &displayBaseMesh);
+            ImGui::Spacing();
             ImGui::Checkbox("Lighting On/Off", &showLighting);
+            ImGui::NewLine();
+            ImGui::Text("Alternative colors: %d", alternativeTextureCount);
+            ImGui::Spacing();
+
+            if (alternativeTextureCount > 0)
+                ImGui::SliderInt(" Color", &selectedTexture, 0, alternativeTextureCount);
         }
 
         ImGui::End();
@@ -242,6 +254,10 @@ int main()
                     glActiveTexture(GL_TEXTURE0); // [TODO] textures are assigned to the wrong submeshes
                     glBindTexture(GL_TEXTURE_2D, textures[i]);
                 }
+
+                if (alternativeTextureCount > 0 && textureCount == 1)
+                    glBindTexture(GL_TEXTURE_2D, textures[selectedTexture]);
+
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[i]);
                 glDrawElements(GL_TRIANGLES, indices[i].size(), GL_UNSIGNED_SHORT, 0);
             }
@@ -304,7 +320,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 // whenever the mouse moves, this callback function executes
 void mouse_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    if (fileDialogOpen)
+    if (fileDialogOpen || settingsPanelHovered)
         return;
 
     // [TODO] EXPLAIN
@@ -429,13 +445,13 @@ void loadBDAEModel(const char *fpath)
 
     if (!textures.empty())
     {
-        glDeleteTextures(textureCount, textures.data());
+        glDeleteTextures(textureCount + alternativeTextureCount, textures.data());
         textures.clear();
     }
 
     vertices.clear();
     indices.clear();
-    fileSize = vertexCount = faceCount = textureCount = totalSubmeshCount = 0;
+    fileSize = vertexCount = faceCount = textureCount = alternativeTextureCount = selectedTexture = totalSubmeshCount = 0;
     std::vector<std::string> textureNames;
 
     // 2. load and parse the .bdae file, building the mesh vertex and index data
@@ -528,6 +544,10 @@ void loadBDAEModel(const char *fpath)
 
             std::cout << "\nTEXTURES: " << ((textureCount != 0) ? std::to_string(textureCount) : "0, file name will be used as a texture name") << std::endl;
 
+            const char *subpathStart = std::strstr(fpath, "/model/") + 7; // subpath starts after '/model/' (texture and model files have the same subpath, e.g. 'creature/pet/')
+            const char *subpathEnd = std::strrchr(fpath, '/') + 1;        // last '/' before the file name
+            std::string textureSubpath(subpathStart, subpathEnd);
+
             // [TODO] implement a more robust approach
             // loop through each retrieved string and find those that are texture names
             for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
@@ -538,20 +558,23 @@ void loadBDAEModel(const char *fpath)
                 for (char &c : s)
                     c = std::tolower(c);
 
-                // remove '/avatar' if it exists
-                int avatarPos = s.find("/avatar");
+                // remove 'avatar/' if it exists
+                int avatarPos = s.find("avatar/");
                 if (avatarPos != std::string::npos)
                     s.erase(avatarPos, 7);
+
+                // remove 'texture/' if it exists
+                if (s.rfind("texture/", 0) == 0)
+                    s.erase(0, 8);
 
                 // a string is a texture file name if it ends with '.tga' and doesn't start with '_'
                 if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
                 {
-                    // ensure it starts with "texture/"
-                    if (s.rfind("texture/", 0) != 0)
-                        s = "texture/" + s;
-
                     // replace the ending with '.png'
                     s.replace(s.length() - 4, 4, ".png");
+
+                    // build final path
+                    s = "texture/" + textureSubpath + s;
 
                     // ensure it is a unique texture name
                     if (std::find(textureNames.begin(), textureNames.end(), s) == textureNames.end())
@@ -560,65 +583,150 @@ void loadBDAEModel(const char *fpath)
             }
 
             // set file info to be displayed in the settings panel
-            std::string pathStr(fpath);
-            fileName = pathStr.substr(pathStr.find_last_of("/\\") + 1); // file name is after the last path separator in the full path
+            std::string path(fpath);
+            fileName = path.substr(path.find_last_of("/\\") + 1); // file name is after the last path separator in the full path
             fileSize = myFile.Size;
             vertexCount = vertices.size() / 8;
 
-            /*
-            if (textureNames.size() == 1)
-            {
-                std::string baseName = textureNames[0];
-                std::string textureDir = "texture/";
+            // if a texture file matching the model file name exists, override the parsed texture (for single-texture models only)
+            std::string s = "texture/" + textureSubpath + fileName;
+            s.replace(s.length() - 5, 5, ".png");
 
-                std::cout << "Searching for alternative color textures..." << std::endl;
+            if (textureCount == 1 && std::filesystem::exists(s))
+                textureNames[0] = s;
 
-                // Extract just the base file name (without path and extension)
-                std::string stem = std::filesystem::path(baseName).stem().string(); // "pet_ents"
-                std::vector<std::string> alternatives;
-
-                for (const auto &entry : std::filesystem::directory_iterator(textureDir))
-                {
-                    if (!entry.is_regular_file())
-                        continue;
-
-                    std::string filename = entry.path().filename().string(); // "pet_ents_red.png"
-
-                    // Convert to lowercase (optional, depending on your platform)
-                    std::string lower = filename;
-                    for (char &c : lower)
-                        c = std::tolower(c);
-
-                    // Must be a .png file, start with stem + '_', and not be exactly baseName
-                    if (lower.size() > stem.size() + 1 &&
-                        lower.compare(0, stem.size(), stem) == 0 &&
-                        lower[stem.size()] == '_' &&
-                        lower.compare(lower.size() - 4, 4, ".png") == 0 &&
-                        (textureDir + lower != baseName))
-                    {
-                        std::string fullPath = textureDir + lower;
-
-                        // Avoid duplicates
-                        if (std::find(textureNames.begin(), textureNames.end(), fullPath) == textureNames.end())
-                        {
-                            std::cout << "Found alternative: " << fullPath << std::endl;
-                            textureNames.push_back(fullPath);
-                        }
-                    }
-                }
-            }
-            */
-
-            // if the texture name is missing in the .bdae file, use this file's name instead (assuming the texture file was manually found and named).
+            // if a texture name is missing in the .bdae file, use this file's name instead (assuming the texture file was manually found and named)
             if (textureNames.empty())
             {
-                std::string s = "texture/" + fileName;
-                textureNames.push_back(s.replace(s.length() - 5, 5, ".png"));
+                textureNames.push_back(s);
                 textureCount++;
             }
 
-            for (int i = 0; i < (int)textureNames.size(); i++)
+            for (int i = 0; i < textureNames.size(); i++)
                 std::cout << "[" << i + 1 << "]  " << textureNames[i] << std::endl;
+
+            // search for alternative texture files
+            // [TODO] handle for multi-texture models
+            if (textureNames.size() == 1)
+            {
+                std::filesystem::path texturePath("texture/" + textureSubpath);
+                std::string baseTextureName = std::filesystem::path(textureNames[0]).stem().string(); // texture file name without extension or folder (e.g. 'boar_01' or 'puppy_bear_black')
+
+                // for a numeric suffix (e.g. '_01', '_2'), remove it if exists (to derive a group name for searching potential alternative textures, e.g 'boar')
+                std::string groupName; // name shared by a group of related textures
+                auto lastUnderscore = baseTextureName.rfind('_');
+
+                if (lastUnderscore != std::string::npos)
+                {
+                    std::string afterLastUnderscore = baseTextureName.substr(lastUnderscore + 1);
+
+                    if (!afterLastUnderscore.empty() && std::all_of(afterLastUnderscore.begin(), afterLastUnderscore.end(), ::isdigit))
+                        groupName = baseTextureName.substr(0, lastUnderscore);
+                }
+
+                // for a non numeric‑suffix (e.g. '_black'), use the “max‑match” approach to find the best group name
+                if (groupName.empty())
+                {
+                    // build a list of all possible prefixes (e.g. 'puppy_black_bear', 'puppy_black', 'puppy')
+                    std::vector<std::string> prefixes;
+                    std::string s = baseTextureName;
+
+                    while (true)
+                    {
+                        prefixes.push_back(s);
+                        auto pos = s.rfind('_');
+
+                        if (pos == std::string::npos)
+                            break;
+
+                        s.resize(pos); // remove the last '_suffix'
+                    }
+
+                    // try each prefix and find the one that gives the highest number of matching texture files
+                    int bestCount = 0;
+
+                    for (int i = 0, n = prefixes.size(); i < n; i++)
+                    {
+                        int count = 0;
+                        std::string pref = prefixes[i];
+
+                        // skip single-word prefixes ('puppy' cannot be a group name, otherwise puppy_wolf.png could be an alternative)
+                        if (pref.find('_') == std::string::npos)
+                            continue;
+
+                        // loop through each file in the texture directory and count how many .png files start with '<pref>_'
+                        for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(texturePath))
+                        {
+                            if (!entry.is_regular_file())
+                                continue;
+
+                            std::filesystem::path entryPath = entry.path();
+
+                            if (entryPath.extension() != ".png")
+                                continue;
+
+                            if (entryPath.stem().string().rfind(pref + '_', 0) == 0)
+                                count++;
+                        }
+
+                        // compare and update the best count; if two prefixes match the same number of textures, prefer the longer one
+                        if (count > bestCount || (count == bestCount && pref.length() > groupName.length()))
+                        {
+                            bestCount = count;
+                            groupName = pref;
+                        }
+                    }
+                }
+
+                // finally, collect textures based on the best group name
+                if (!groupName.empty())
+                {
+                    std::vector<std::string> found;
+
+                    for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(texturePath))
+                    {
+                        if (!entry.is_regular_file())
+                            continue;
+
+                        std::filesystem::path entryPath = entry.path();
+
+                        if (entryPath.extension() != ".png")
+                            continue;
+
+                        // skip the file if its name doesn't exactly match the group name, and doesn’t start with the group name followed by an underscore.
+                        if (!(entryPath.stem().string() == groupName || entryPath.stem().string().rfind(groupName + '_', 0) == 0))
+                            continue;
+
+                        std::string alternativeTextureName = "texture/" + textureSubpath + entryPath.filename().string();
+
+                        // skip the original base texture (already in textureNames[0])
+                        if (alternativeTextureName == textureNames[0])
+                            continue;
+
+                        // ensure it is a unique texture name
+                        if (std::find(textureNames.begin(), textureNames.end(), alternativeTextureName) == textureNames.end())
+                        {
+                            found.push_back(alternativeTextureName);
+                            alternativeTextureCount++;
+                        }
+                    }
+
+                    if (!found.empty())
+                    {
+                        // append and report
+                        textureNames.insert(textureNames.end(), found.begin(), found.end());
+
+                        std::cout << "Found " << found.size() << " alternative(s) for '" << groupName << "':\n";
+
+                        for (int i = 0; i < found.size(); i++)
+                            std::cout << "  " << found[i] << "\n";
+                    }
+                    else
+                        std::cout << "No alternatives found for group '" << groupName << "'\n";
+                }
+                else
+                    std::cout << "No valid grouping name for '" << baseTextureName << "'\n";
+            }
         }
 
         free(myFile.DataBuffer);
@@ -655,10 +763,10 @@ void loadBDAEModel(const char *fpath)
     }
 
     // 4. load texture(s)
-    textures.resize(textureCount);
-    glGenTextures(textureCount, textures.data()); // generate and store texture ID(s)
+    textures.resize(textureNames.size());
+    glGenTextures(textureNames.size(), textures.data()); // generate and store texture ID(s)
 
-    for (int i = 0; i < textureCount; i++)
+    for (int i = 0; i < textureNames.size(); i++)
     {
         glBindTexture(GL_TEXTURE_2D, textures[i]); // bind the texture ID so that all upcoming texture operations affect this texture
 
