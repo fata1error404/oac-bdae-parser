@@ -59,11 +59,11 @@ The .bdae viewer consists of:
 - `libs/glad` – library for loading OpenGL functions.
 - `libs/imgui` – Dear ImGui library for file browsing and settings UI.
 
-These files, except for the last 2 libraries, were written from scratch. Currently, the functionality includes loading a selected .bdae model, displaying a mesh with a texture applied, and allowing the user to fly around it.
+These files, except for the last 3 libraries, were written from scratch. Currently, the functionality includes loading a selected .bdae model, displaying a mesh with texture(s) applied, and allowing the user to fly around it.
 
  __How does the .bdae viewer work?__
 
-As input, it takes the loaded into memory .bdae file, its removable section metadata and string data retrieved by the .bdae parser (to note, I don't use the Offset Table at all). From the string data, we learn the model’s texture name. From the removable section metadata, we access the vertex and index data (indices define triangles — they tell which 3 vertices to connect during rendering). In fact, each mesh can be a combination of multiple submeshes, stored consecutively but separately in the .bdae file; this split is defined in the removable section. Therefore, we iterate over each submesh, retrieve its vertex and index data, and append them to the flat vectors of a single mesh, which are then ready for rendering.
+As input, it takes the loaded into memory .bdae file, its removable section metadata and string data retrieved by the .bdae parser (to note, I don't use the Offset Table at all). From the string data, we learn the model’s texture name(s). From the removable section metadata, we access the vertex and index data (indices define triangles — they tell which 3 vertices to connect during rendering). In fact, a model can be a combination of multiple meshes, and each of which may be subdivided into several submeshes. A submesh has its own index data, stored consecutively but separately in the .bdae file; this split is defined in the data section. We therefore iterate over every mesh to extract its vertices and indices: all vertex data goes into a single vector, while index data is stored in separate vectors for each submesh to ensure correct rendering.
 
 The viewer is a standard OpenGL application built on fundamental concepts of computer graphics. It uses __OpenGL 3.3__ as its rendering backend (core profile, enabling full control over the graphics rendering pipeline), with __GLSL__ for programmable shaders.
 
