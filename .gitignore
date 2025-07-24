@@ -10,3 +10,6 @@ little_endian_not_quantized.bdae
 *.tags
 
 libs/imgui/imgui.ini
+
+zip_linux.sh
+bdae-viewer-linux.zip

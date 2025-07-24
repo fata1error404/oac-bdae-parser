@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <pthread.h>
 #include "IReadResFile.h"
 
 #define ZIP_RES_INFO_IN_DATA_DESCRITOR 0x0008

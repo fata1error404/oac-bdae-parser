@@ -103,14 +103,18 @@
 #endif
 
 // GLFW
+#ifdef __linux__
 #include <GLFW/glfw3.h>
+#elif _WIN32
+#include "libs/glfw/glfw3.h"
+#endif
 
 #ifdef _WIN32
 #undef APIENTRY
 #ifndef GLFW_EXPOSE_NATIVE_WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #endif
-#include <GLFW/glfw3native.h>   // for glfwGetWin32Window()
+#include "../glfw/glfw3native.h"   // for glfwGetWin32Window()
 #endif
 #ifdef __APPLE__
 #ifndef GLFW_EXPOSE_NATIVE_COCOA

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <cstdint>
 #include "resFile.h"
 #include "libs/io/PackPatchReader.h"
 

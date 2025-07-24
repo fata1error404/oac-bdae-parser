@@ -3,6 +3,7 @@
 
 #define MAX_FILE_NAME_LEN 1024
 
+#include <pthread.h>
 #include "IReadResFile.h"
 #include "CZipResReader.h"
 

@@ -2,22 +2,26 @@
 #include <iomanip>
 #include <string>
 #include <filesystem>
-#include "libs/glad/glad.h"             // library for loading OpenGL functions (like glClear or glViewport)
-#include <GLFW/glfw3.h>                 // library for creating windows and handling input – mouse clicks, keyboard input, or window resizes
-#include <glm/glm.hpp>                  // for basic vector and matrix mathematics functions
-#include <glm/gtc/matrix_transform.hpp> // for matrix transformation functions
-#include <glm/gtc/type_ptr.hpp>         // for matrix conversion to raw pointers (OpenGL compatibility with GLM)
-
-#include "libs/imgui/imgui.h"
-#include "libs/imgui/imgui_impl_opengl3.h"
-#include "libs/imgui/imgui_impl_glfw.h"
-#include "libs/imgui/ImGuiFileDialog.h"
+#include "libs/glad/glad.h"                  // library for OpenGL functions loading (like glClear or glViewport)
+#include "libs/glm/glm.hpp"                  // library for OpenGL style mathematics (basic vector and matrix mathematics functions)
+#include "libs/glm/gtc/matrix_transform.hpp" // for matrix transformation functions
+#include "libs/glm/gtc/type_ptr.hpp"         // for matrix conversion to raw pointers (OpenGL compatibility with GLM)
+#include "libs/imgui/imgui.h"                // library for UI elements
+#include "libs/imgui/imgui_impl_opengl3.h"   // connects Dear ImGui with OpenGL
+#include "libs/imgui/imgui_impl_glfw.h"      // connects Dear ImGui with GLFW
+#include "libs/imgui/ImGuiFileDialog.h"      // extension for file browsing dialog
 
 #define STB_IMAGE_IMPLEMENTATION // define a STB_IMAGE_IMPLEMENTATION macro (to tell the compiler to include function implementations)
 #include "libs/stb_image.h"      // library for image loading
 #include "shader.h"              // implementation of the graphics pipeline
 #include "camera.h"              // implementation of the camera system
 #include "light.h"               // definition of the light settings and light cube
+
+#ifdef __linux__
+#include <GLFW/glfw3.h> // library for creating windows and handling input – mouse clicks, keyboard input, or window resizes
+#elif _WIN32
+#include "libs/glfw/glfw3.h"
+#endif
 
 #include "libs/io/PackPatchReader.h"
 #include "resFile.h"
@@ -121,7 +125,7 @@ int main()
 
     // configure file browsing dialog
     IGFD::FileDialogConfig cfg;
-    cfg.path = "./model/creature/pet";                                                     // default path
+    cfg.path = "./model/creature";                                                         // default path
     cfg.fileName = "";                                                                     // default file name (none)
     cfg.filePathName = "";                                                                 // default file path name (none)
     cfg.countSelectionMax = 1;                                                             // only allow to select one file
@@ -199,6 +203,7 @@ int main()
                 loadBDAEModel(selection.begin()->second.c_str());
             }
 
+            cfg.path = ImGuiFileDialog::Instance()->GetCurrentPath();
             IGFD::FileDialog::Instance()->Close(); // close the dialog after handling OK or Cancel
         }
 
@@ -568,7 +573,7 @@ void loadBDAEModel(const char *fpath)
                     s.erase(0, 8);
 
                 // a string is a texture file name if it ends with '.tga' and doesn't start with '_'
-                if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_')
+                if (s.length() >= 4 && s.compare(s.length() - 4, 4, ".tga") == 0 && s[0] != '_' && s.substr(0, 3) != "e:/")
                 {
                     // replace the ending with '.png'
                     s.replace(s.length() - 4, 4, ".png");
@@ -593,7 +598,10 @@ void loadBDAEModel(const char *fpath)
             s.replace(s.length() - 5, 5, ".png");
 
             if (textureCount == 1 && std::filesystem::exists(s))
-                textureNames[0] = s;
+            {
+                textureNames.clear();
+                textureNames.push_back(s);
+            }
 
             // if a texture name is missing in the .bdae file, use this file's name instead (assuming the texture file was manually found and named)
             if (textureNames.empty())
@@ -607,21 +615,52 @@ void loadBDAEModel(const char *fpath)
 
             // search for alternative texture files
             // [TODO] handle for multi-texture models
-            if (textureNames.size() == 1)
+            if (textureNames.size() == 1 && std::filesystem::exists(textureNames[0]))
             {
                 std::filesystem::path texturePath("texture/" + textureSubpath);
                 std::string baseTextureName = std::filesystem::path(textureNames[0]).stem().string(); // texture file name without extension or folder (e.g. 'boar_01' or 'puppy_bear_black')
 
-                // for a numeric suffix (e.g. '_01', '_2'), remove it if exists (to derive a group name for searching potential alternative textures, e.g 'boar')
                 std::string groupName; // name shared by a group of related textures
-                auto lastUnderscore = baseTextureName.rfind('_');
 
-                if (lastUnderscore != std::string::npos)
+                // naming rule #1
+                if (baseTextureName.find("lvl") != std::string::npos && baseTextureName.find("world") != std::string::npos)
+                    groupName = baseTextureName;
+
+                // naming rule #2
+                for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(texturePath))
                 {
-                    std::string afterLastUnderscore = baseTextureName.substr(lastUnderscore + 1);
+                    if (!entry.is_regular_file())
+                        continue;
 
-                    if (!afterLastUnderscore.empty() && std::all_of(afterLastUnderscore.begin(), afterLastUnderscore.end(), ::isdigit))
-                        groupName = baseTextureName.substr(0, lastUnderscore);
+                    std::filesystem::path entryPath = entry.path();
+
+                    if (entryPath.extension() != ".png")
+                        continue;
+
+                    std::string baseEntryName = entryPath.stem().string();
+
+                    if (baseEntryName.rfind(baseTextureName + '_', 0) == 0 &&                                  // starts with '<baseTextureName>_'
+                        baseEntryName.size() > baseTextureName.size() + 1 &&                                   // has at least one character after the underscore
+                        std::isdigit(static_cast<unsigned char>(baseEntryName[baseTextureName.size() + 1])) && // first character after '_' is a digit
+                        entryPath.string() != textureNames[0])                                                 // not the original base texture itself
+                    {
+                        groupName = baseTextureName;
+                        break;
+                    }
+                }
+
+                // for a numeric suffix (e.g. '_01', '_2'), remove it if exists (to derive a group name for searching potential alternative textures, e.g 'boar')
+                if (groupName.empty())
+                {
+                    auto lastUnderscore = baseTextureName.rfind('_');
+
+                    if (lastUnderscore != std::string::npos)
+                    {
+                        std::string afterLastUnderscore = baseTextureName.substr(lastUnderscore + 1);
+
+                        if (!afterLastUnderscore.empty() && std::all_of(afterLastUnderscore.begin(), afterLastUnderscore.end(), ::isdigit))
+                            groupName = baseTextureName.substr(0, lastUnderscore);
+                    }
                 }
 
                 // for a non numeric‑suffix (e.g. '_black'), use the “max‑match” approach to find the best group name
