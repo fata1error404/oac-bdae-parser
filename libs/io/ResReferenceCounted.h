@@ -1,25 +1,37 @@
+//-*-c++-*-
+#pragma once
 #ifndef __RESIREFERENCECOUNTED_H__
 #define __RESIREFERENCECOUNTED_H__
 
-// Utility class for tracking file references in memory.
-// _____________________________________________________
-
 class IResReferenceCounted
 {
+protected:
+	IResReferenceCounted(bool startCountAtOne = true)
+		: ReferenceCounter(startCountAtOne ? 1 : 0)
+	{
+	}
+
+	virtual ~IResReferenceCounted()
+	{
+	}
+
 public:
-	//! Increases the counter.
+
 	void grab() const
 	{
 		++ReferenceCounter;
 	}
 
-	//! Decreases the counter and deletes the object if no references remain.
 	bool drop() const
 	{
+		// someone is doing bad reference counting.
+		//assert(ReferenceCounter <= 0);
+
 		--ReferenceCounter;
 
 		if (ReferenceCounter == 0)
 		{
+			const_cast<IResReferenceCounted*>(this)->onDelete();
 			delete this;
 			return true;
 		}
@@ -27,13 +39,24 @@ public:
 		return false;
 	}
 
+	void setDebugName(const char* newName)
+	{
+#ifdef _DEBUG
+		DebugName = newName;
+#endif
+	}
+
+protected:
+	virtual void onDelete()
+	{
+	}
+
 protected:
 	mutable unsigned int ReferenceCounter;
-
-	IResReferenceCounted(bool startCountAtOne = true)
-		: ReferenceCounter(startCountAtOne ? 1 : 0) {}
-
-	virtual ~IResReferenceCounted() {}
+#ifdef _DEBUG
+	const char* DebugName;
+#endif
 };
 
-#endif
+
+#endif //__RESIREFERENCECOUNTED_H__

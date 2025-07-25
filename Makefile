@@ -18,7 +18,7 @@ app: main.cpp resFile.cpp $(LIB_SOURCES)
 else
 # Windows build
 app: main.cpp resFile.cpp $(LIB_SOURCES)
-	g++ main.cpp resFile.cpp $(LIB_SOURCES) -o $(TARGET) libs/io/libio_windows.a libs/GLFW/libglfw3.a -lgdi32
+	g++ main.cpp resFile.cpp $(LIB_SOURCES) aux_docs/resource.res -o $(TARGET) libs/io/libio_windows.a libs/GLFW/libglfw3.a -lgdi32
 endif
 
 clean:

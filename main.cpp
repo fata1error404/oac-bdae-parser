@@ -549,8 +549,13 @@ void loadBDAEModel(const char *fpath)
 
             std::cout << "\nTEXTURES: " << ((textureCount != 0) ? std::to_string(textureCount) : "0, file name will be used as a texture name") << std::endl;
 
-            const char *subpathStart = std::strstr(fpath, "/model/") + 7; // subpath starts after '/model/' (texture and model files have the same subpath, e.g. 'creature/pet/')
-            const char *subpathEnd = std::strrchr(fpath, '/') + 1;        // last '/' before the file name
+            // normalize model path for cross-platform compatibility (Windows uses '\', Linux uses '/')
+            std::string modelPath(fpath);
+            std::replace(modelPath.begin(), modelPath.end(), '\\', '/');
+
+            // retrieve model subpath
+            const char *subpathStart = std::strstr(modelPath.c_str(), "/model/") + 7; // subpath starts after '/model/' (texture and model files have the same subpath, e.g. 'creature/pet/')
+            const char *subpathEnd = std::strrchr(modelPath.c_str(), '/') + 1;        // last '/' before the file name
             std::string textureSubpath(subpathStart, subpathEnd);
 
             // [TODO] implement a more robust approach
@@ -588,8 +593,7 @@ void loadBDAEModel(const char *fpath)
             }
 
             // set file info to be displayed in the settings panel
-            std::string path(fpath);
-            fileName = path.substr(path.find_last_of("/\\") + 1); // file name is after the last path separator in the full path
+            fileName = modelPath.substr(modelPath.find_last_of("/\\") + 1); // file name is after the last path separator in the full path
             fileSize = myFile.Size;
             vertexCount = vertices.size() / 8;
 

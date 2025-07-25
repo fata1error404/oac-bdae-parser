@@ -106,7 +106,7 @@
 #ifdef __linux__
 #include <GLFW/glfw3.h>
 #elif _WIN32
-#include "libs/glfw/glfw3.h"
+#include "../glfw/glfw3.h"
 #endif
 
 #ifdef _WIN32
