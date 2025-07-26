@@ -125,7 +125,7 @@ int main()
 
     // configure file browsing dialog
     IGFD::FileDialogConfig cfg;
-    cfg.path = "./model/creature";                                                         // default path
+    cfg.path = "./model";                                                                  // default path
     cfg.fileName = "";                                                                     // default file name (none)
     cfg.filePathName = "";                                                                 // default file path name (none)
     cfg.countSelectionMax = 1;                                                             // only allow to select one file
@@ -137,6 +137,9 @@ int main()
 
     // enable depth testing to ensure correct pixel rendering order in 3D space (depth buffer prevents incorrect overlaying and redrawing of objects)
     glEnable(GL_DEPTH_TEST);
+
+    glEnable(GL_BLEND);                                // enable blending with the scene
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // use the opacity value of the model texture to blend it correctly, ensuring smooth transparency on the edges
 
     Shader ourShader("shader model.vs", "shader model.fs");
 
@@ -473,7 +476,7 @@ void loadBDAEModel(const char *fpath)
 
         if (result != 1)
         {
-            std::cout << "\nRetrieving model vertex and index data, loading textures.." << std::endl;
+            // std::cout << "\nRetrieving model vertex and index data, loading textures.." << std::endl;
 
             // retrieve the number of meshes, submeshes, and vertex count for each one
             int meshCount, meshInfoOffset;
@@ -481,15 +484,33 @@ void loadBDAEModel(const char *fpath)
             memcpy(&meshCount, ptr, sizeof(int));
             memcpy(&meshInfoOffset, ptr + 4, sizeof(int));
 
-            std::cout << "MESHES: " << meshCount << std::endl;
+            std::cout << "\nMESHES: " << meshCount << std::endl;
 
-            int meshVertexCount[meshCount], submeshCount[meshCount], meshMetadataOffset[meshCount];
+            int meshVertexCount[meshCount], submeshCount[meshCount], meshMetadataOffset[meshCount], meshVertexDataOffset[meshCount];
 
             for (int i = 0; i < meshCount; i++)
             {
                 memcpy(&meshMetadataOffset[i], ptr + 4 + meshInfoOffset + 20 + i * 24, sizeof(int));
                 memcpy(&meshVertexCount[i], ptr + 4 + meshInfoOffset + 20 + i * 24 + meshMetadataOffset[i] + 4, sizeof(int));
                 memcpy(&submeshCount[i], ptr + 4 + meshInfoOffset + 20 + i * 24 + meshMetadataOffset[i] + 12, sizeof(int));
+
+                /* [TODO] parse mesh vertex data offset
+
+                memcpy(&meshVertexDataOffset[i], ptr + 4 + meshInfoOffset + 20 + i * 24 + meshMetadataOffset[i] + 88, sizeof(int));
+
+                unsigned char *bytes = reinterpret_cast<unsigned char *>(ptr + 4 + meshInfoOffset + 20 + i * 24 + meshMetadataOffset[i]);
+
+                for (int i = 0; i < 100; ++i)
+                {
+                    std::cout << std::hex << std::setw(2) << std::setfill('0')
+                              << static_cast<int>(bytes[i]) << " ";
+
+                    if ((i + 1) % 16 == 0)
+                        std::cout << "\n";
+                }
+                std::cout << std::dec << std::endl;
+
+                */
 
                 std::cout << "[" << i + 1 << "]  " << meshVertexCount[i] << " vertices, " << submeshCount[i] << " submeshes" << std::endl;
                 totalSubmeshCount += submeshCount[i];
@@ -558,11 +579,20 @@ void loadBDAEModel(const char *fpath)
             const char *subpathEnd = std::strrchr(modelPath.c_str(), '/') + 1;        // last '/' before the file name
             std::string textureSubpath(subpathStart, subpathEnd);
 
+            bool isAlphaRef = false;       // for debugging textures
+            bool isUnsortedFolder = false; // for 'unsorted' folder
+
+            if (textureSubpath.rfind("unsorted/", 0) == 0)
+                isUnsortedFolder = true;
+
             // [TODO] implement a more robust approach
             // loop through each retrieved string and find those that are texture names
             for (int i = 0, n = myFile.StringStorage.size(); i < n; i++)
             {
                 std::string s = myFile.StringStorage[i];
+
+                if (s == "alpharef")
+                    isAlphaRef = true;
 
                 // convert to lowercase
                 for (char &c : s)
@@ -570,7 +600,7 @@ void loadBDAEModel(const char *fpath)
 
                 // remove 'avatar/' if it exists
                 int avatarPos = s.find("avatar/");
-                if (avatarPos != std::string::npos)
+                if (avatarPos != std::string::npos && !isUnsortedFolder)
                     s.erase(avatarPos, 7);
 
                 // remove 'texture/' if it exists
@@ -584,7 +614,10 @@ void loadBDAEModel(const char *fpath)
                     s.replace(s.length() - 4, 4, ".png");
 
                     // build final path
-                    s = "texture/" + textureSubpath + s;
+                    if (!isUnsortedFolder)
+                        s = "texture/" + textureSubpath + s;
+                    else
+                        s = "texture/unsorted/" + s;
 
                     // ensure it is a unique texture name
                     if (std::find(textureNames.begin(), textureNames.end(), s) == textureNames.end())
@@ -619,7 +652,7 @@ void loadBDAEModel(const char *fpath)
 
             // search for alternative texture files
             // [TODO] handle for multi-texture models
-            if (textureNames.size() == 1 && std::filesystem::exists(textureNames[0]))
+            if (textureNames.size() == 1 && std::filesystem::exists(textureNames[0]) && !isUnsortedFolder)
             {
                 std::filesystem::path texturePath("texture/" + textureSubpath);
                 std::string baseTextureName = std::filesystem::path(textureNames[0]).stem().string(); // texture file name without extension or folder (e.g. 'boar_01' or 'puppy_bear_black')
@@ -770,6 +803,9 @@ void loadBDAEModel(const char *fpath)
                 else
                     std::cout << "No valid grouping name for '" << baseTextureName << "'\n";
             }
+
+            // if (isAlphaRef)
+            //     std::cout << "\nALPHAREF" << std::endl;
         }
 
         free(myFile.DataBuffer);
@@ -815,10 +851,10 @@ void loadBDAEModel(const char *fpath)
 
         // set the texture wrapping parameters
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // for s (x) axis
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // for t (y) axis
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // for t (y) axis R
 
         // set texture filtering parameters
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         int width, height, nrChannels, format;

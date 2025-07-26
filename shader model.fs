@@ -22,6 +22,10 @@ void main()
     if (renderMode == 1)
     {
         vec4 baseColor = texture(modelTexture, TexCoord);
+
+        if (baseColor.a < 0.1)
+            discard;
+
         vec3 result = baseColor.rgb;
 
         if (lighting)
@@ -41,7 +45,7 @@ void main()
             result = (ambient + diffuse + specular) * result;
         }
 
-        FragColor = vec4(result, 1.0);
+        FragColor = vec4(result, baseColor.a);
     }
     else if (renderMode == 2)
         FragColor = vec4(0.3, 0.3, 0.3, 1.0);
